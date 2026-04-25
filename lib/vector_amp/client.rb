@@ -17,9 +17,9 @@ module VectorAmp
 
       @base_url = base_url
       @transport = transport || Transport::HTTP.new(base_url: base_url, api_key: api_key, timeout: timeout)
-      @datasets = DatasetsResource.new(@transport)
       @ingestion = IngestionResource.new(@transport)
       @intelligence = IntelligenceResource.new(@transport)
+      @datasets = DatasetsResource.new(@transport, client: self)
     end
 
     def ask(query, **options)

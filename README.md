@@ -40,8 +40,9 @@ dataset = client.datasets.create(
   }
 )
 
+# Create/get/list return VectorAmp::Dataset resources, so you can use instance methods.
 # Add raw vectors.
-client.datasets.insert(dataset["id"], vectors: [
+dataset.insert(vectors: [
   {
     id: "doc-001",
     values: [0.1, 0.2, 0.3],
@@ -50,18 +51,18 @@ client.datasets.insert(dataset["id"], vectors: [
 ])
 
 # Or embed and insert text in one call.
-client.datasets.add_texts(
-  dataset["id"],
+dataset.add_texts(
   texts: ["VectorAmp is powered by SABLE."],
   metadata: { source: "readme" }
 )
 
-results = client.datasets.search(
-  dataset["id"],
+results = dataset.search(
   query_text: "What powers VectorAmp?",
   top_k: 5,
   include_documents: true
 )
+
+answer = dataset.ask("What powers VectorAmp?")
 ```
 
 ## Configuration
@@ -79,15 +80,14 @@ client = VectorAmp::Client.new(
 ## Datasets
 
 ```ruby
-# Paginated envelope: { "datasets" => [...], "total" => n, "limit" => 50, "offset" => 0 }
-client.datasets.list(limit: 50, offset: 0)
+# Paginated envelope: { "datasets" => [VectorAmp::Dataset, ...], "total" => n, "limit" => 50, "offset" => 0 }
+page = client.datasets.list(limit: 50, offset: 0)
+dataset = page["datasets"].first
 
-client.datasets.get("dataset-uuid")
-client.datasets.stats("dataset-uuid")
-client.datasets.delete("dataset-uuid")
-
-client.datasets.search(
-  "dataset-uuid",
+# Resource-style methods.
+dataset = client.datasets.get("dataset-uuid")
+dataset.stats
+dataset.search(
   query_text: "wireless headphones",
   top_k: 10,
   filters: { category: "electronics" },
@@ -97,6 +97,17 @@ client.datasets.search(
   include_metadata: true,
   include_documents: false
 )
+dataset.insert(vectors: [{ id: "sku-1", values: [0.1, 0.2], metadata: { category: "electronics" } }])
+dataset.add_texts(texts: ["Wireless headphones"], metadata: { category: "electronics" })
+dataset.ask("Which headphones should I buy?")
+dataset.ingest_source("source-uuid")
+dataset.delete
+
+# Service-style methods are still supported.
+client.datasets.stats("dataset-uuid")
+client.datasets.delete("dataset-uuid")
+client.datasets.search("dataset-uuid", query_text: "wireless headphones", top_k: 10)
+client.datasets.insert("dataset-uuid", vectors: [])
 ```
 
 `client.datasets.create` intentionally does not accept `index_type`; all datasets are created with SABLE.

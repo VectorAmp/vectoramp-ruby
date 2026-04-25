@@ -1,20 +1,22 @@
 # frozen_string_literal: true
 
 require "securerandom"
+require_relative "dataset"
 require_relative "utils"
 
 module VectorAmp
   class DatasetsResource
-    def initialize(transport)
+    def initialize(transport, client: nil)
       @transport = transport
+      @client = client
     end
 
     def list(limit: 50, offset: 0)
-      @transport.request(:get, "/datasets", query: { limit: limit, offset: offset })
+      wrap_list(@transport.request(:get, "/datasets", query: { limit: limit, offset: offset }))
     end
 
     def get(dataset_id)
-      @transport.request(:get, "/datasets/#{dataset_id}")
+      wrap_dataset(@transport.request(:get, "/datasets/#{dataset_id}"))
     end
 
     def delete(dataset_id)
@@ -41,7 +43,7 @@ module VectorAmp
         metadata_schema: metadata_schema,
         tuning: tuning
       )
-      @transport.request(:post, "/datasets", body: body)
+      wrap_dataset(@transport.request(:post, "/datasets", body: body))
     end
 
     def search(dataset_id, query: nil, query_text: nil, top_k: 10, filters: nil, advanced_filters: nil,
@@ -97,6 +99,21 @@ module VectorAmp
         }
       end
       insert(dataset_id, vectors: vectors)
+    end
+
+    private
+
+    def wrap_dataset(data)
+      Dataset.new(data, service: self, client: @client)
+    end
+
+    def wrap_list(response)
+      return response unless response.is_a?(Hash)
+
+      datasets = response["datasets"] || response[:datasets]
+      return response unless datasets.is_a?(Array)
+
+      response.merge("datasets" => datasets.map { |dataset| wrap_dataset(dataset) })
     end
   end
 end
