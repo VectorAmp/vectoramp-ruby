@@ -6,19 +6,37 @@ require_relative "source"
 require_relative "utils"
 
 module VectorAmp
+  # Ingestion API resource for sources, jobs, and direct file uploads.
   class IngestionResource
+    # @param transport [#request] API transport.
+    # @return [IngestionResource]
     def initialize(transport)
       @transport = transport
     end
 
+    # List ingestion sources.
+    # @param limit [Integer] page size; defaults to 50.
+    # @param offset [Integer] page offset; defaults to 0.
+    # @return [Hash] response envelope from the API.
     def list_sources(limit: 50, offset: 0)
       @transport.request(:get, "/ingestion/sources", query: { limit: limit, offset: offset })
     end
 
+    # Fetch an ingestion source.
+    # @param source_id [String] source id.
+    # @return [Hash] source response.
     def get_source(source_id)
       @transport.request(:get, "/ingestion/sources/#{source_id}")
     end
 
+    # Create an ingestion source from a Source object/hash or explicit options.
+    # @param source [Source, Hash, nil] optional source object/hash; when supplied, option fields are ignored.
+    # @param source_type [String, Symbol, nil] source type (`s3`, `web`, `gdrive`, or `file_upload`).
+    # @param name [String, nil] source name; defaults by source type when omitted.
+    # @param config [Hash, nil] source-specific config.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @return [Hash] created source response.
     def create_source(source = nil, source_type: nil, name: nil, config: nil, description: nil, metadata: nil)
       body = source ? source_create_body(source) : source_create_body_from_options(
         source_type: source_type,
@@ -30,10 +48,19 @@ module VectorAmp
       @transport.request(:post, "/v1/sources", body: body)
     end
 
+    # Alias for {#create_source}.
+    # @return [Hash] created source response.
     def create(source = nil, **options)
       create_source(source, **options)
     end
 
+    # Create a web source.
+    # @param start_urls [String, Array<String>] required seed URLs.
+    # @param name [String, nil] defaults to `web-<host>` from the first URL, or `web-source`.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param config [Hash] additional web-source config forwarded to the API.
+    # @return [Hash] created source response.
     def create_web(start_urls:, name: nil, description: nil, metadata: nil, **config)
       create_source(WebSource.new(
         name: name,
@@ -44,6 +71,14 @@ module VectorAmp
       ))
     end
 
+    # Create an S3 source.
+    # @param bucket [String] required S3 bucket name.
+    # @param name [String, nil] defaults to `s3-<bucket>` or `s3-<bucket>-<prefix>`.
+    # @param prefix [String, nil] optional object prefix.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param config [Hash] additional S3-source config forwarded to the API.
+    # @return [Hash] created source response.
     def create_s3(bucket:, name: nil, prefix: nil, description: nil, metadata: nil, **config)
       create_source(S3Source.new(
         name: name,
@@ -55,6 +90,14 @@ module VectorAmp
       ))
     end
 
+    # Create a Google Drive source.
+    # @param name [String, nil] defaults to `google-drive-<first id>` or `google-drive-source`.
+    # @param folder_ids [String, Array<String>, nil] folder ids to ingest; required if file_ids is empty.
+    # @param file_ids [String, Array<String>, nil] file ids to ingest; required if folder_ids is empty.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param config [Hash] additional Google Drive-source config forwarded to the API.
+    # @return [Hash] created source response.
     def create_google_drive(name: nil, folder_ids: nil, file_ids: nil, description: nil, metadata: nil, **config)
       create_source(GoogleDriveSource.new(
         name: name,
@@ -66,6 +109,14 @@ module VectorAmp
       ))
     end
 
+    # Create a file-upload source.
+    # @param name [String, nil] defaults to timestamped `ruby-sdk-file-upload-YYYYmmddHHMMSS`.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param storage_provider [String] storage backend; defaults to `s3`.
+    # @param sync_mode [String] sync strategy; defaults to `full`.
+    # @param config [Hash] additional file-upload config forwarded to the API.
+    # @return [Hash] created source response.
     def create_file_upload(name: nil, description: nil, metadata: nil, storage_provider: "s3", sync_mode: "full", **config)
       create_source(FileUploadSource.new(
         name: name,
@@ -77,6 +128,11 @@ module VectorAmp
       ))
     end
 
+    # Start an ingestion job for a source and dataset.
+    # @param source_id [String] source id.
+    # @param dataset_id [String] target dataset id.
+    # @param pipeline_id [String, nil] optional pipeline id.
+    # @return [Hash] ingestion job response.
     def start_job(source_id:, dataset_id:, pipeline_id: nil)
       @transport.request(:post, "/ingestion/jobs", body: Utils.compact_hash(
         source_id: source_id,
@@ -85,26 +141,50 @@ module VectorAmp
       ))
     end
 
+    # List ingestion jobs.
+    # @param dataset_id [String, nil] optional dataset filter.
+    # @param limit [Integer] page size; defaults to 50.
+    # @param offset [Integer] page offset; defaults to 0.
+    # @return [Hash] response envelope from the API.
     def list_jobs(dataset_id: nil, limit: 50, offset: 0)
       @transport.request(:get, "/ingestion/jobs", query: Utils.compact_hash(dataset_id: dataset_id, limit: limit, offset: offset))
     end
 
+    # Fetch an ingestion job.
+    # @param job_id [String] job id.
+    # @return [Hash] job response.
     def get_job(job_id)
       @transport.request(:get, "/ingestion/jobs/#{job_id}")
     end
 
+    # List files attached to an ingestion job.
+    # @param job_id [String] job id.
+    # @return [Hash] files response.
     def job_files(job_id)
       @transport.request(:get, "/ingestion/jobs/#{job_id}/files")
     end
 
+    # Fetch ingestion job statistics.
+    # @param job_id [String] job id.
+    # @return [Hash] statistics response.
     def job_statistics(job_id)
       @transport.request(:get, "/ingestion/jobs/#{job_id}/statistics")
     end
 
+    # Cancel an ingestion job.
+    # @param job_id [String] job id.
+    # @return [Hash] cancel response.
     def cancel_job(job_id)
       @transport.request(:delete, "/ingestion/jobs/#{job_id}/cancel")
     end
 
+    # Upload local files by auto-creating a `file_upload` source, initializing presigned uploads, and completing the upload job.
+    # @param dataset_id [String] target dataset id; also added to source metadata.
+    # @param paths [String, Array<String>] local file paths to upload.
+    # @param source_name [String, nil] optional source name; defaults to timestamped Ruby SDK file-upload name.
+    # @param description [String, nil] optional source description.
+    # @param metadata [Hash] optional source metadata merged with dataset_id.
+    # @return [Hash] upload completion/job response.
     def ingest_files(dataset_id:, paths:, source_name: nil, description: nil, metadata: {})
       files = Array(paths).map { |path| Pathname(path) }
       raise ArgumentError, "paths must not be empty" if files.empty?
@@ -121,6 +201,10 @@ module VectorAmp
       complete_upload(source_id, job_id: init.fetch("job_id"), file_ids: init.fetch("uploads").map { |upload| upload.fetch("file_id") })
     end
 
+    # Initialize presigned uploads for source files.
+    # @param source_id [String] file-upload source id.
+    # @param files [Array<String, Pathname>] local files.
+    # @return [Hash] init response containing uploads and job_id.
     def init_upload(source_id, files)
       payload = Array(files).map do |file|
         path = Pathname(file)
@@ -133,6 +217,11 @@ module VectorAmp
       @transport.request(:post, "/v1/sources/#{source_id}/upload/init", body: { files: payload })
     end
 
+    # Complete a file upload job after files have been PUT to presigned URLs.
+    # @param source_id [String] file-upload source id.
+    # @param job_id [String] upload job id from {#init_upload}.
+    # @param file_ids [Array<String>] file ids from {#init_upload}.
+    # @return [Hash] upload completion/job response.
     def complete_upload(source_id, job_id:, file_ids:)
       @transport.request(:post, "/v1/sources/#{source_id}/upload/complete", body: { job_id: job_id, file_ids: file_ids })
     end
