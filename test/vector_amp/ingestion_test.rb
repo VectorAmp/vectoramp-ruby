@@ -78,6 +78,21 @@ class VectorAmpIngestionTest < Minitest::Test
     assert_equal "src_custom", @client.sources.create_source(generic).fetch("id")
   end
 
+  def test_typed_source_builders_default_names
+    assert_equal "web-docs.example.com", VectorAmp::WebSource.new(start_urls: ["https://docs.example.com"]).name
+    assert_equal "s3-docs-bucket-manuals", VectorAmp::S3Source.new(bucket: "docs-bucket", prefix: "manuals/").name
+    assert_equal "google-drive-folder_1", VectorAmp::GoogleDriveSource.new(folder_ids: ["folder_1"]).name
+    assert_match(/\Aruby-sdk-file-upload-\d{14}\z/, VectorAmp::FileUploadSource.new.name)
+  end
+
+  def test_create_source_defaults_known_source_names
+    stub_request(:post, "#{API}/v1/sources")
+      .with(body: hash_including(source_type: "web", name: "web-docs.example.com", config: { start_urls: ["https://docs.example.com"] }))
+      .to_return_json(status: 201, body: { id: "src_web" })
+
+    assert_equal "src_web", @client.sources.create_source(source_type: "web", config: { start_urls: ["https://docs.example.com"] }).fetch("id")
+  end
+
   def test_typed_sources_validate_required_fields
     assert_raises(ArgumentError) { VectorAmp::WebSource.new(name: "docs", start_urls: []) }
     assert_raises(ArgumentError) { VectorAmp::S3Source.new(name: "bucket", bucket: "") }
@@ -90,7 +105,12 @@ class VectorAmpIngestionTest < Minitest::Test
     file.close
 
     stub_request(:post, "#{API}/v1/sources")
-      .with(body: hash_including(source_type: "file_upload", metadata: { dataset_id: "ds_1", project: "docs" }))
+      .with { |request|
+        body = JSON.parse(request.body)
+        body["source_type"] == "file_upload" &&
+          body["name"].match?(/\Aruby-sdk-file-upload-\d{14}\z/) &&
+          body["metadata"] == { "dataset_id" => "ds_1", "project" => "docs" }
+      }
       .to_return_json(status: 201, body: { id: "src_1" })
     stub_request(:post, "#{API}/v1/sources/src_1/upload/init")
       .with { |request| JSON.parse(request.body).fetch("files").first.fetch("content_type") == "text/plain" }

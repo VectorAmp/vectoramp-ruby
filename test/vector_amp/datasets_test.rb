@@ -62,6 +62,17 @@ class VectorAmpDatasetsTest < Minitest::Test
     assert_equal [], response.fetch("results")
   end
 
+  def test_search_accepts_plain_query_text
+    stub = stub_request(:post, "#{API}/datasets/ds_1/search")
+           .with(body: hash_including(query_text: "hello", top_k: 10))
+           .to_return_json(body: { results: [], dataset_id: "ds_1" })
+
+    response = @client.datasets.search("ds_1", "hello")
+
+    assert_requested stub
+    assert_equal [], response.fetch("results")
+  end
+
   def test_insert_vectors
     vectors = [{ id: "a", values: [0.1], metadata: { title: "A" } }]
     stub_request(:post, "#{API}/datasets/ds_1/insert")
@@ -105,7 +116,7 @@ class VectorAmpDatasetsTest < Minitest::Test
       .to_return_json(body: { answer: "42" })
     stub_request(:get, "#{API}/datasets/ds_1/stats").to_return_json(body: { vector_count: 1 })
 
-    assert_equal ["hit"], dataset.search(query_text: "hello").fetch("results")
+    assert_equal ["hit"], dataset.search("hello").fetch("results")
     assert_equal 1, dataset.insert(vectors: vectors).fetch("inserted")
     assert_equal "42", dataset.ask("question").fetch("answer")
     assert_equal 1, dataset.stats.fetch("vector_count")
@@ -125,7 +136,7 @@ class VectorAmpDatasetsTest < Minitest::Test
       .with(body: { source_id: "src_1", dataset_id: "ds_1" })
       .to_return_json(body: { job_id: "job_1" })
 
-    assert_equal 1, dataset.add_texts(texts: ["alpha"], ids: ["a"]).fetch("inserted")
+    assert_equal 1, dataset.add_texts(["alpha"], ids: ["a"]).fetch("inserted")
     assert_equal "job_1", dataset.ingest_source("src_1").fetch("job_id")
   end
 

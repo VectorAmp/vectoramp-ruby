@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "uri"
 require_relative "utils"
 
 module VectorAmp
@@ -20,7 +21,7 @@ module VectorAmp
 
       @id = id
       @source_type = source_type.to_s
-      @name = name
+      @name = name.to_s
       @description = description
       @config = config
       @metadata = metadata
@@ -78,15 +79,43 @@ module VectorAmp
     end
   end
 
+  module SourceNames
+    module_function
+
+    def file_upload(now: Time.now.utc)
+      "ruby-sdk-file-upload-#{now.strftime("%Y%m%d%H%M%S")}"
+    end
+
+    def web(start_urls)
+      first_url = Array(start_urls).first.to_s
+      host = URI.parse(first_url).host
+      host && !host.empty? ? "web-#{host}" : "web-source"
+    rescue URI::InvalidURIError
+      "web-source"
+    end
+
+    def s3(bucket, prefix = nil)
+      parts = ["s3", bucket.to_s, prefix.to_s.delete_suffix("/")].reject(&:empty?)
+      parts.join("-")
+    end
+
+    def google_drive(folder_ids: nil, file_ids: nil)
+      first_folder = Array(folder_ids).first
+      first_file = Array(file_ids).first
+      suffix = first_folder || first_file
+      suffix ? "google-drive-#{suffix}" : "google-drive-source"
+    end
+  end
+
   class WebSource < Source
-    def initialize(name:, start_urls:, description: nil, metadata: nil, id: nil, **config)
+    def initialize(start_urls:, name: nil, description: nil, metadata: nil, id: nil, **config)
       urls = Array(start_urls)
       raise ArgumentError, "start_urls must not be empty" if urls.empty?
 
       super(
         id: id,
         source_type: "web",
-        name: name,
+        name: name || SourceNames.web(urls),
         description: description,
         metadata: metadata,
         config: Utils.compact_hash(config.merge(start_urls: urls))
@@ -95,13 +124,13 @@ module VectorAmp
   end
 
   class S3Source < Source
-    def initialize(name:, bucket:, prefix: nil, description: nil, metadata: nil, id: nil, **config)
+    def initialize(bucket:, name: nil, prefix: nil, description: nil, metadata: nil, id: nil, **config)
       raise ArgumentError, "bucket is required" if bucket.nil? || bucket.to_s.empty?
 
       super(
         id: id,
         source_type: "s3",
-        name: name,
+        name: name || SourceNames.s3(bucket, prefix),
         description: description,
         metadata: metadata,
         config: Utils.compact_hash(config.merge(bucket: bucket, prefix: prefix))
@@ -110,7 +139,7 @@ module VectorAmp
   end
 
   class GoogleDriveSource < Source
-    def initialize(name:, folder_ids: nil, file_ids: nil, description: nil, metadata: nil, id: nil, **config)
+    def initialize(name: nil, folder_ids: nil, file_ids: nil, description: nil, metadata: nil, id: nil, **config)
       if Array(folder_ids).empty? && Array(file_ids).empty?
         raise ArgumentError, "folder_ids or file_ids is required"
       end
@@ -118,7 +147,7 @@ module VectorAmp
       super(
         id: id,
         source_type: "gdrive",
-        name: name,
+        name: name || SourceNames.google_drive(folder_ids: folder_ids, file_ids: file_ids),
         description: description,
         metadata: metadata,
         config: Utils.compact_hash(config.merge(folder_ids: folder_ids, file_ids: file_ids))
@@ -127,11 +156,11 @@ module VectorAmp
   end
 
   class FileUploadSource < Source
-    def initialize(name:, description: nil, metadata: nil, id: nil, storage_provider: "s3", sync_mode: "full", **config)
+    def initialize(name: nil, description: nil, metadata: nil, id: nil, storage_provider: "s3", sync_mode: "full", **config)
       super(
         id: id,
         source_type: "file_upload",
-        name: name,
+        name: name || SourceNames.file_upload,
         description: description,
         metadata: metadata,
         config: Utils.compact_hash(config.merge(storage_provider: storage_provider, sync_mode: sync_mode))
