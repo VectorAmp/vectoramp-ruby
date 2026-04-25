@@ -39,16 +39,16 @@ module VectorAmp
       "#<#{self.class} id=#{id.inspect} data=#{@data.inspect}>"
     end
 
-    def search(**options)
-      service.search(id, **options)
+    def search(query_text = nil, **options)
+      service.search(id, query_text, **options)
     end
 
     def insert(vectors:)
       service.insert(id, vectors: vectors)
     end
 
-    def add_texts(texts:, ids: nil, metadata: nil)
-      service.add_texts(id, texts: texts, ids: ids, metadata: metadata)
+    def add_texts(texts_arg = nil, texts: nil, ids: nil, metadata: nil)
+      service.add_texts(id, texts_arg, texts: texts, ids: ids, metadata: metadata)
     end
 
     def delete

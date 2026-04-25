@@ -57,7 +57,7 @@ dataset.add_texts(
 )
 
 results = dataset.search(
-  query_text: "What powers VectorAmp?",
+  "What powers VectorAmp?",
   top_k: 5,
   include_documents: true
 )
@@ -98,7 +98,7 @@ dataset.search(
   include_documents: false
 )
 dataset.insert(vectors: [{ id: "sku-1", values: [0.1, 0.2], metadata: { category: "electronics" } }])
-dataset.add_texts(texts: ["Wireless headphones"], metadata: { category: "electronics" })
+dataset.add_texts(["Wireless headphones"], metadata: { category: "electronics" })
 dataset.ask("Which headphones should I buy?")
 dataset.ingest_source("source-uuid")
 dataset.delete
@@ -106,7 +106,7 @@ dataset.delete
 # Service-style methods are still supported.
 client.datasets.stats("dataset-uuid")
 client.datasets.delete("dataset-uuid")
-client.datasets.search("dataset-uuid", query_text: "wireless headphones", top_k: 10)
+client.datasets.search("dataset-uuid", "wireless headphones", top_k: 10)
 client.datasets.insert("dataset-uuid", vectors: [])
 ```
 
@@ -122,23 +122,23 @@ client.ingestion.get_source("source-uuid")
 # Typed builders cover the supported source_type values:
 # "web", "s3", "gdrive", and "file_upload".
 source = client.sources.create_web(
-  name: "docs-site",
   start_urls: ["https://docs.example.com"],
   max_depth: 1
 )
 
 s3_source = client.sources.create_s3(
-  name: "docs-bucket",
   bucket: "vectoramp-docs",
   prefix: "public/"
 )
 
 gdrive_source = client.sources.create_google_drive(
-  name: "shared-drive-docs",
   folder_ids: ["google-drive-folder-id"]
 )
 
-file_source = client.sources.create_file_upload(name: "local-upload")
+file_source = client.sources.create_file_upload
+
+# You can still pass name: when you want control. If omitted, the SDK chooses
+# a readable default from the URL, bucket, Google Drive id, or upload timestamp.
 
 # GenericSource is an escape hatch for API-compatible source configs that are
 # not modeled by a typed SDK helper yet.
@@ -182,9 +182,12 @@ client.ingestion.cancel_job(job["job_id"])
 client.ingestion.ingest_files(
   dataset_id: "dataset-uuid",
   paths: ["docs/whitepaper.pdf", "docs/notes.md"],
-  source_name: "product-docs-upload",
   metadata: { team: "product" }
 )
+
+# Or from a Dataset resource. No source name is required; the SDK creates a
+# file_upload source with a generated name before uploading.
+dataset.ingest_files(paths: ["docs/whitepaper.pdf"])
 ```
 
 ## Intelligence / RAG

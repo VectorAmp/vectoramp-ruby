@@ -20,7 +20,7 @@ module VectorAmp
     end
 
     def create_source(source = nil, source_type: nil, name: nil, config: nil, description: nil, metadata: nil)
-      body = source ? source_create_body(source) : Utils.compact_hash(
+      body = source ? source_create_body(source) : source_create_body_from_options(
         source_type: source_type,
         name: name,
         description: description,
@@ -34,7 +34,7 @@ module VectorAmp
       create_source(source, **options)
     end
 
-    def create_web(name:, start_urls:, description: nil, metadata: nil, **config)
+    def create_web(start_urls:, name: nil, description: nil, metadata: nil, **config)
       create_source(WebSource.new(
         name: name,
         start_urls: start_urls,
@@ -44,7 +44,7 @@ module VectorAmp
       ))
     end
 
-    def create_s3(name:, bucket:, prefix: nil, description: nil, metadata: nil, **config)
+    def create_s3(bucket:, name: nil, prefix: nil, description: nil, metadata: nil, **config)
       create_source(S3Source.new(
         name: name,
         bucket: bucket,
@@ -55,7 +55,7 @@ module VectorAmp
       ))
     end
 
-    def create_google_drive(name:, folder_ids: nil, file_ids: nil, description: nil, metadata: nil, **config)
+    def create_google_drive(name: nil, folder_ids: nil, file_ids: nil, description: nil, metadata: nil, **config)
       create_source(GoogleDriveSource.new(
         name: name,
         folder_ids: folder_ids,
@@ -66,7 +66,7 @@ module VectorAmp
       ))
     end
 
-    def create_file_upload(name:, description: nil, metadata: nil, storage_provider: "s3", sync_mode: "full", **config)
+    def create_file_upload(name: nil, description: nil, metadata: nil, storage_provider: "s3", sync_mode: "full", **config)
       create_source(FileUploadSource.new(
         name: name,
         description: description,
@@ -109,12 +109,10 @@ module VectorAmp
       files = Array(paths).map { |path| Pathname(path) }
       raise ArgumentError, "paths must not be empty" if files.empty?
 
-      source = create_source(
-        source_type: "file_upload",
-        name: source_name || "ruby-sdk-upload-#{Time.now.utc.strftime("%Y%m%d%H%M%S")}",
+      source = create_file_upload(
+        name: source_name,
         description: description,
-        config: { storage_provider: "s3", sync_mode: "full" },
-        metadata: metadata.merge(dataset_id: dataset_id)
+        metadata: (metadata || {}).merge(dataset_id: dataset_id)
       )
       source_id = source.fetch("id") { source.fetch(:id) }
 
@@ -145,13 +143,33 @@ module VectorAmp
       return source.to_create_body if source.respond_to?(:to_create_body)
 
       hash = Source.normalize_hash(source)
-      Utils.compact_hash(
+      source_create_body_from_options(
         source_type: hash["source_type"],
         name: hash["name"],
         description: hash["description"],
         config: hash["config"],
         metadata: hash["metadata"]
       )
+    end
+
+    def source_create_body_from_options(source_type:, name:, config:, description: nil, metadata: nil)
+      resolved_type = source_type&.to_s
+      Utils.compact_hash(
+        source_type: resolved_type,
+        name: name || default_source_name(resolved_type, config || {}),
+        description: description,
+        config: config,
+        metadata: metadata
+      )
+    end
+
+    def default_source_name(source_type, config)
+      case source_type
+      when "file_upload" then SourceNames.file_upload
+      when "web" then SourceNames.web(config[:start_urls] || config["start_urls"])
+      when "s3" then SourceNames.s3(config[:bucket] || config["bucket"], config[:prefix] || config["prefix"])
+      when "gdrive" then SourceNames.google_drive(folder_ids: config[:folder_ids] || config["folder_ids"], file_ids: config[:file_ids] || config["file_ids"])
+      end
     end
 
     def upload_files_to_presigned_urls(files, uploads)

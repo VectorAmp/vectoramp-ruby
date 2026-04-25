@@ -46,14 +46,19 @@ module VectorAmp
       wrap_dataset(@transport.request(:post, "/datasets", body: body))
     end
 
-    def search(dataset_id, query: nil, query_text: nil, top_k: 10, filters: nil, advanced_filters: nil,
+    def search(dataset_id, query_text_or_options = nil, query: nil, query_text: nil, top_k: 10, filters: nil, advanced_filters: nil,
                embedding_model: nil, embedding_provider: nil, nprobe_override: nil, rerank_depth_override: nil,
                hybrid: nil, sparse_query: nil, alpha: nil, include_embeddings: nil, include_documents: nil,
                include_metadata: nil, **unknown)
+      if query_text_or_options.is_a?(Hash)
+        unknown = query_text_or_options.merge(unknown)
+        query_text_or_options = nil
+      end
       Utils.ensure_no_unknown!(unknown, "search")
+      resolved_query_text = query_text || query_text_or_options
       body = Utils.compact_hash(
         query: query,
-        query_text: query_text,
+        query_text: resolved_query_text,
         top_k: top_k,
         filters: filters,
         advanced_filters: advanced_filters,
@@ -81,8 +86,9 @@ module VectorAmp
       @transport.request(:post, "/datasets/#{dataset_id}/embed", body: Utils.compact_hash(text: text, texts: texts))
     end
 
-    def add_texts(dataset_id, texts:, ids: nil, metadata: nil)
-      raise ArgumentError, "texts must not be empty" if texts.empty?
+    def add_texts(dataset_id, texts_arg = nil, texts: nil, ids: nil, metadata: nil)
+      texts ||= texts_arg
+      raise ArgumentError, "texts must not be empty" if texts.nil? || texts.empty?
       raise ArgumentError, "ids length must match texts length" if ids && ids.length != texts.length
       if metadata.is_a?(Array) && metadata.length != texts.length
         raise ArgumentError, "metadata length must match texts length"
