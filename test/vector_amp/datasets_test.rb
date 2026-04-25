@@ -129,6 +129,17 @@ class VectorAmpDatasetsTest < Minitest::Test
     assert_equal "job_1", dataset.ingest_source("src_1").fetch("job_id")
   end
 
+  def test_dataset_ingest_source_accepts_typed_source_object
+    dataset = VectorAmp::Dataset.new({ id: "ds_1" }, service: @client.datasets, client: @client)
+    source = VectorAmp::WebSource.new(id: "src_1", name: "docs", start_urls: ["https://docs.example.com"])
+
+    stub_request(:post, "#{API}/ingestion/jobs")
+      .with(body: { source_id: "src_1", dataset_id: "ds_1", pipeline_id: "pipe_1" })
+      .to_return_json(body: { job_id: "job_1" })
+
+    assert_equal "job_1", dataset.ingest_source(source, pipeline_id: "pipe_1").fetch("job_id")
+  end
+
   def test_add_texts_validates_lengths
     assert_raises(ArgumentError) { @client.datasets.add_texts("ds", texts: [], ids: []) }
     assert_raises(ArgumentError) { @client.datasets.add_texts("ds", texts: ["a"], ids: []) }

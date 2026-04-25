@@ -2,6 +2,7 @@
 
 require "pathname"
 require "net/http"
+require_relative "source"
 require_relative "utils"
 
 module VectorAmp
@@ -18,13 +19,61 @@ module VectorAmp
       @transport.request(:get, "/ingestion/sources/#{source_id}")
     end
 
-    def create_source(source_type:, name:, config:, description: nil, metadata: nil)
-      @transport.request(:post, "/v1/sources", body: Utils.compact_hash(
+    def create_source(source = nil, source_type: nil, name: nil, config: nil, description: nil, metadata: nil)
+      body = source ? source_create_body(source) : Utils.compact_hash(
         source_type: source_type,
         name: name,
         description: description,
         config: config,
         metadata: metadata
+      )
+      @transport.request(:post, "/v1/sources", body: body)
+    end
+
+    def create(source = nil, **options)
+      create_source(source, **options)
+    end
+
+    def create_web(name:, start_urls:, description: nil, metadata: nil, **config)
+      create_source(WebSource.new(
+        name: name,
+        start_urls: start_urls,
+        description: description,
+        metadata: metadata,
+        **config
+      ))
+    end
+
+    def create_s3(name:, bucket:, prefix: nil, description: nil, metadata: nil, **config)
+      create_source(S3Source.new(
+        name: name,
+        bucket: bucket,
+        prefix: prefix,
+        description: description,
+        metadata: metadata,
+        **config
+      ))
+    end
+
+    def create_google_drive(name:, folder_ids: nil, file_ids: nil, description: nil, metadata: nil, **config)
+      create_source(GoogleDriveSource.new(
+        name: name,
+        folder_ids: folder_ids,
+        file_ids: file_ids,
+        description: description,
+        metadata: metadata,
+        **config
+      ))
+    end
+
+    def create_file_upload(name:, description: nil, metadata: nil, storage_provider: "s3", sync_mode: "full", **config)
+      create_source(FileUploadSource.new(
+        name: name,
+        description: description,
+        metadata: metadata,
+        storage_provider: storage_provider,
+        sync_mode: sync_mode,
+        **config
       ))
     end
 
@@ -91,6 +140,19 @@ module VectorAmp
     end
 
     private
+
+    def source_create_body(source)
+      return source.to_create_body if source.respond_to?(:to_create_body)
+
+      hash = Source.normalize_hash(source)
+      Utils.compact_hash(
+        source_type: hash["source_type"],
+        name: hash["name"],
+        description: hash["description"],
+        config: hash["config"],
+        metadata: hash["metadata"]
+      )
+    end
 
     def upload_files_to_presigned_urls(files, uploads)
       files.zip(uploads).each do |file, upload|

@@ -77,7 +77,7 @@ module VectorAmp
 
     def ingest_source(source_id = nil, source: nil, pipeline_id: nil)
       require_client!("ingest_source")
-      resolved_source_id = source_id || extract_id(normalize_data(source))
+      resolved_source_id = extract_source_id(source_id || source)
       raise ArgumentError, "source_id is required" if resolved_source_id.nil? || resolved_source_id.to_s.empty?
 
       client.ingestion.start_job(source_id: resolved_source_id, dataset_id: id, pipeline_id: pipeline_id)
@@ -98,6 +98,13 @@ module VectorAmp
       return nil unless hash
 
       hash["id"] || hash[:id] || hash["dataset_id"] || hash[:dataset_id]
+    end
+
+    def extract_source_id(value)
+      return value if value.is_a?(String) || value.is_a?(Symbol)
+      return value.id if value.respond_to?(:id)
+
+      extract_id(normalize_data(value))
     end
 
     def require_client!(method_name)
