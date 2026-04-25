@@ -6,9 +6,17 @@ module VectorAmp
   # It keeps the raw API payload while adding convenient instance methods that
   # delegate to the existing service-style APIs.
   class Dataset
+    # @return [DatasetsResource] backing dataset service.
+    # @return [Client, nil] client that created this object, required for convenience ingestion/ask helpers.
+    # @return [String] dataset id.
+    # @return [Hash] normalized raw API payload.
     attr_reader :service, :client, :id, :data
     alias raw_data data
 
+    # @param data [Hash] dataset API payload; `id` or `dataset_id` is required.
+    # @param service [DatasetsResource] backing dataset service.
+    # @param client [Client, nil] optional client for convenience helpers.
+    # @return [Dataset]
     def initialize(data, service:, client: nil)
       @data = normalize_data(data)
       @service = service
@@ -17,19 +25,28 @@ module VectorAmp
       raise ArgumentError, "dataset id is required" if @id.nil? || @id.to_s.empty?
     end
 
+    # Read a raw dataset field by string or symbol key.
+    # @param key [String, Symbol] field name.
+    # @return [Object, nil]
     def [](key)
       @data[key.to_s]
     end
 
+    # Fetch a raw dataset field by string or symbol key.
+    # @param key [String, Symbol] field name.
+    # @return [Object]
     def fetch(key, *args, &block)
       @data.fetch(key.to_s, *args, &block)
     end
 
+    # @param key [String, Symbol] field name.
+    # @return [Boolean] whether the raw payload has the field.
     def key?(key)
       @data.key?(key.to_s)
     end
     alias has_key? key?
 
+    # @return [Hash] shallow copy of the raw API payload.
     def to_h
       @data.dup
     end
@@ -39,31 +56,58 @@ module VectorAmp
       "#<#{self.class} id=#{id.inspect} data=#{@data.inspect}>"
     end
 
+    # Search this dataset.
+    # @param query_text [String, nil] optional text query; alternatively pass `query:` vector/options.
+    # @param options [Hash] forwarded to {DatasetsResource#search}.
+    # @return [Hash] search response.
     def search(query_text = nil, **options)
       service.search(id, query_text, **options)
     end
 
+    # Insert vectors into this dataset.
+    # @param vectors [Array<Hash>] vector records with ids, values, and optional metadata.
+    # @return [Hash] insert response.
     def insert(vectors:)
       service.insert(id, vectors: vectors)
     end
 
+    # Embed and insert texts into this dataset.
+    # @param texts_arg [Array<String>, nil] positional texts for convenience.
+    # @param texts [Array<String>, nil] keyword texts.
+    # @param ids [Array<String>, nil] optional ids; generated UUIDs when omitted.
+    # @param metadata [Hash, Array<Hash>, nil] metadata applied to all texts or per-text.
+    # @return [Hash] insert response.
     def add_texts(texts_arg = nil, texts: nil, ids: nil, metadata: nil)
       service.add_texts(id, texts_arg, texts: texts, ids: ids, metadata: metadata)
     end
 
+    # Delete this dataset.
+    # @return [Hash] delete response.
     def delete
       service.delete(id)
     end
 
+    # Fetch stats for this dataset.
+    # @return [Hash] dataset statistics.
     def stats
       service.stats(id)
     end
 
+    # Ask an intelligence question constrained to this dataset.
+    # @param query [String] natural-language question.
+    # @param options [Hash] forwarded to {Client#ask}; `dataset_id` is set to this dataset id.
+    # @return [Hash] intelligence response.
     def ask(query, **options)
       require_client!("ask")
       client.ask(query, **options.merge(dataset_id: id))
     end
 
+    # Upload local files by auto-creating a `file_upload` source, initializing presigned uploads, and completing the upload job.
+    # @param paths [String, Array<String>] local file paths to upload.
+    # @param source_name [String, nil] optional source name; defaults to timestamped Ruby SDK file-upload name.
+    # @param description [String, nil] optional source description.
+    # @param metadata [Hash] optional source metadata; dataset_id is added automatically.
+    # @return [Hash] upload completion/job response.
     def ingest_files(paths:, source_name: nil, description: nil, metadata: {})
       require_client!("ingest_files")
       client.ingestion.ingest_files(
@@ -75,6 +119,11 @@ module VectorAmp
       )
     end
 
+    # Start an ingestion job from an existing source into this dataset.
+    # @param source_id [String, Source, Hash, nil] source id or object/hash containing an id.
+    # @param source [Source, Hash, nil] alternate source object/hash containing an id.
+    # @param pipeline_id [String, nil] optional pipeline id.
+    # @return [Hash] ingestion job response.
     def ingest_source(source_id = nil, source: nil, pipeline_id: nil)
       require_client!("ingest_source")
       resolved_source_id = extract_source_id(source_id || source)

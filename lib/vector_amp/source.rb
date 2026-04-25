@@ -12,8 +12,22 @@ module VectorAmp
   class Source
     SUPPORTED_SOURCE_TYPES = %w[s3 web gdrive file_upload].freeze
 
+    # @return [String, nil] API source id when returned by the API.
+    # @return [String] source type (`s3`, `web`, `gdrive`, or `file_upload`).
+    # @return [String] source display name.
+    # @return [String, nil] optional source description.
+    # @return [Hash] source-specific configuration.
+    # @return [Hash, nil] optional source metadata.
     attr_reader :id, :source_type, :name, :description, :config, :metadata
 
+    # Create a source value object.
+    # @param source_type [String, Symbol] one of `s3`, `web`, `gdrive`, or `file_upload`.
+    # @param name [String] source display name.
+    # @param config [Hash] source-specific config sent to the API.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param id [String, nil] optional API source id.
+    # @return [Source]
     def initialize(source_type:, name:, config:, description: nil, metadata: nil, id: nil)
       raise ArgumentError, "source_type is required" if source_type.nil? || source_type.to_s.empty?
       raise ArgumentError, "name is required" if name.nil? || name.to_s.empty?
@@ -27,6 +41,9 @@ module VectorAmp
       @metadata = metadata
     end
 
+    # Build a generic source object from an API response hash.
+    # @param data [Hash] source payload returned by the API.
+    # @return [GenericSource]
     def self.from_api(data)
       hash = normalize_hash(data)
       GenericSource.new(
@@ -39,10 +56,15 @@ module VectorAmp
       )
     end
 
+    # Read a source attribute by string or symbol key.
+    # @param key [String, Symbol] attribute name.
+    # @return [Object, nil]
     def [](key)
       to_h[key.to_sym] || to_h[key.to_s]
     end
 
+    # Convert this source to a hash including the id when present.
+    # @return [Hash]
     def to_h
       Utils.compact_hash(
         id: id,
@@ -55,6 +77,8 @@ module VectorAmp
     end
     alias to_hash to_h
 
+    # Convert this source to an API create-source request body.
+    # @return [Hash]
     def to_create_body
       Utils.compact_hash(
         source_type: source_type,
@@ -79,13 +103,17 @@ module VectorAmp
     end
   end
 
+  # Default source-name helpers used when a name is omitted.
   module SourceNames
     module_function
 
+    # @return [String] timestamped `ruby-sdk-file-upload-YYYYmmddHHMMSS` name.
     def file_upload(now: Time.now.utc)
       "ruby-sdk-file-upload-#{now.strftime("%Y%m%d%H%M%S")}"
     end
 
+    # @param start_urls [String, Array<String>] source URLs.
+    # @return [String] `web-<host>` from the first URL, or `web-source`.
     def web(start_urls)
       first_url = Array(start_urls).first.to_s
       host = URI.parse(first_url).host
@@ -94,11 +122,17 @@ module VectorAmp
       "web-source"
     end
 
+    # @param bucket [String] bucket name.
+    # @param prefix [String, nil] optional prefix.
+    # @return [String] `s3-<bucket>` or `s3-<bucket>-<prefix>`.
     def s3(bucket, prefix = nil)
       parts = ["s3", bucket.to_s, prefix.to_s.delete_suffix("/")].reject(&:empty?)
       parts.join("-")
     end
 
+    # @param folder_ids [String, Array<String>, nil] folder ids.
+    # @param file_ids [String, Array<String>, nil] file ids.
+    # @return [String] `google-drive-<first id>` or `google-drive-source`.
     def google_drive(folder_ids: nil, file_ids: nil)
       first_folder = Array(folder_ids).first
       first_file = Array(file_ids).first
@@ -107,7 +141,15 @@ module VectorAmp
     end
   end
 
+  # Web-crawl ingestion source.
   class WebSource < Source
+    # @param start_urls [String, Array<String>] required seed URLs.
+    # @param name [String, nil] defaults to `web-<host>` from the first URL, or `web-source`.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param id [String, nil] optional API source id.
+    # @param config [Hash] additional web-source config forwarded to the API.
+    # @return [WebSource]
     def initialize(start_urls:, name: nil, description: nil, metadata: nil, id: nil, **config)
       urls = Array(start_urls)
       raise ArgumentError, "start_urls must not be empty" if urls.empty?
@@ -123,7 +165,16 @@ module VectorAmp
     end
   end
 
+  # S3 ingestion source.
   class S3Source < Source
+    # @param bucket [String] required S3 bucket name.
+    # @param name [String, nil] defaults to `s3-<bucket>` or `s3-<bucket>-<prefix>`.
+    # @param prefix [String, nil] optional object prefix.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param id [String, nil] optional API source id.
+    # @param config [Hash] additional S3-source config forwarded to the API.
+    # @return [S3Source]
     def initialize(bucket:, name: nil, prefix: nil, description: nil, metadata: nil, id: nil, **config)
       raise ArgumentError, "bucket is required" if bucket.nil? || bucket.to_s.empty?
 
@@ -138,7 +189,16 @@ module VectorAmp
     end
   end
 
+  # Google Drive ingestion source.
   class GoogleDriveSource < Source
+    # @param name [String, nil] defaults to `google-drive-<first id>` or `google-drive-source`.
+    # @param folder_ids [String, Array<String>, nil] folder ids to ingest; required if file_ids is empty.
+    # @param file_ids [String, Array<String>, nil] file ids to ingest; required if folder_ids is empty.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param id [String, nil] optional API source id.
+    # @param config [Hash] additional Google Drive-source config forwarded to the API.
+    # @return [GoogleDriveSource]
     def initialize(name: nil, folder_ids: nil, file_ids: nil, description: nil, metadata: nil, id: nil, **config)
       if Array(folder_ids).empty? && Array(file_ids).empty?
         raise ArgumentError, "folder_ids or file_ids is required"
@@ -155,7 +215,16 @@ module VectorAmp
     end
   end
 
+  # File-upload ingestion source used by direct local file uploads.
   class FileUploadSource < Source
+    # @param name [String, nil] defaults to timestamped `ruby-sdk-file-upload-YYYYmmddHHMMSS`.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param id [String, nil] optional API source id.
+    # @param storage_provider [String] storage backend; defaults to `s3`.
+    # @param sync_mode [String] sync strategy; defaults to `full`.
+    # @param config [Hash] additional file-upload config forwarded to the API.
+    # @return [FileUploadSource]
     def initialize(name: nil, description: nil, metadata: nil, id: nil, storage_provider: "s3", sync_mode: "full", **config)
       super(
         id: id,
