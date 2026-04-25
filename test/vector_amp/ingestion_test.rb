@@ -42,6 +42,48 @@ class VectorAmpIngestionTest < Minitest::Test
     assert_equal true, @client.ingestion.cancel_job("job_1").fetch("cancelled")
   end
 
+  def test_typed_source_builders_and_create_helpers
+    web = VectorAmp::WebSource.new(name: "docs", start_urls: ["https://docs.example.com"], max_depth: 2)
+    assert_equal "web", web.source_type
+    assert_equal({ start_urls: ["https://docs.example.com"], max_depth: 2 }, web.config)
+    assert_includes VectorAmp::Source::SUPPORTED_SOURCE_TYPES, "gdrive"
+
+    generic = VectorAmp::GenericSource.new(
+      source_type: "custom",
+      name: "custom-source",
+      config: { endpoint: "https://example.com/feed" }
+    )
+    assert_equal "custom", generic.source_type
+
+    stub_request(:post, "#{API}/v1/sources")
+      .with(body: { source_type: "web", name: "docs", config: { start_urls: ["https://docs.example.com"], max_depth: 2 } })
+      .to_return_json(status: 201, body: { id: "src_web" })
+    stub_request(:post, "#{API}/v1/sources")
+      .with(body: { source_type: "s3", name: "bucket", config: { bucket: "docs-bucket", prefix: "manuals/", region: "us-east-1" } })
+      .to_return_json(status: 201, body: { id: "src_s3" })
+    stub_request(:post, "#{API}/v1/sources")
+      .with(body: { source_type: "gdrive", name: "drive", config: { folder_ids: ["folder_1"] } })
+      .to_return_json(status: 201, body: { id: "src_drive" })
+    stub_request(:post, "#{API}/v1/sources")
+      .with(body: { source_type: "file_upload", name: "upload", config: { storage_provider: "s3", sync_mode: "full" } })
+      .to_return_json(status: 201, body: { id: "src_upload" })
+    stub_request(:post, "#{API}/v1/sources")
+      .with(body: { source_type: "custom", name: "custom-source", config: { endpoint: "https://example.com/feed" } })
+      .to_return_json(status: 201, body: { id: "src_custom" })
+
+    assert_equal "src_web", @client.sources.create(web).fetch("id")
+    assert_equal "src_s3", @client.sources.create_s3(name: "bucket", bucket: "docs-bucket", prefix: "manuals/", region: "us-east-1").fetch("id")
+    assert_equal "src_drive", @client.sources.create_google_drive(name: "drive", folder_ids: ["folder_1"]).fetch("id")
+    assert_equal "src_upload", @client.sources.create_file_upload(name: "upload").fetch("id")
+    assert_equal "src_custom", @client.sources.create_source(generic).fetch("id")
+  end
+
+  def test_typed_sources_validate_required_fields
+    assert_raises(ArgumentError) { VectorAmp::WebSource.new(name: "docs", start_urls: []) }
+    assert_raises(ArgumentError) { VectorAmp::S3Source.new(name: "bucket", bucket: "") }
+    assert_raises(ArgumentError) { VectorAmp::GoogleDriveSource.new(name: "drive") }
+  end
+
   def test_ingest_files_uploads_to_presigned_url_and_completes
     file = Tempfile.new(["vectoramp", ".txt"])
     file.write("hello")

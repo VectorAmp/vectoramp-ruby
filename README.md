@@ -119,6 +119,37 @@ client.datasets.insert("dataset-uuid", vectors: [])
 client.ingestion.list_sources(limit: 50, offset: 0)
 client.ingestion.get_source("source-uuid")
 
+# Typed builders cover the supported source_type values:
+# "web", "s3", "gdrive", and "file_upload".
+source = client.sources.create_web(
+  name: "docs-site",
+  start_urls: ["https://docs.example.com"],
+  max_depth: 1
+)
+
+s3_source = client.sources.create_s3(
+  name: "docs-bucket",
+  bucket: "vectoramp-docs",
+  prefix: "public/"
+)
+
+gdrive_source = client.sources.create_google_drive(
+  name: "shared-drive-docs",
+  folder_ids: ["google-drive-folder-id"]
+)
+
+file_source = client.sources.create_file_upload(name: "local-upload")
+
+# GenericSource is an escape hatch for API-compatible source configs that are
+# not modeled by a typed SDK helper yet.
+generic_source = VectorAmp::GenericSource.new(
+  source_type: "custom",
+  name: "custom-source",
+  config: { endpoint: "https://example.com/feed" }
+)
+client.sources.create(generic_source)
+
+# The lower-level existing API is still supported.
 source = client.ingestion.create_source(
   source_type: "web",
   name: "docs-site",
@@ -129,6 +160,11 @@ job = client.ingestion.start_job(
   source_id: source["id"],
   dataset_id: "dataset-uuid"
 )
+
+# Dataset resources can ingest by source id or by a typed source object that has an id.
+dataset.ingest_source(source["id"])
+typed_source = VectorAmp::WebSource.new(id: source["id"], name: "docs-site", start_urls: ["https://docs.example.com"])
+dataset.ingest_source(typed_source)
 
 # Jobs: paginated envelope { "jobs" => [...], "total" => n, ... }
 client.ingestion.list_jobs(dataset_id: "dataset-uuid", limit: 50, offset: 0)
