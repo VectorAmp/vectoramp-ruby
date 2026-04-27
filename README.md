@@ -112,6 +112,28 @@ client.datasets.insert("dataset-uuid", vectors: [])
 
 `client.datasets.create` intentionally does not accept `index_type`; all datasets are created with SABLE.
 
+### Source documents
+
+Dataset document listing is cursor-based: pass `next_cursor` into the next request and do not assume offsets or totals. Downloads return retained original bytes and follow API/storage redirects.
+
+```ruby
+page = client.datasets.list_documents("dataset-uuid", limit: 50, cursor: nil, status: "ready")
+page.fetch("documents").each do |doc|
+  next unless doc["download_available"]
+
+  bytes = client.datasets.download_document("dataset-uuid", doc.fetch("id"))
+end
+
+if page["next_cursor"]
+  next_page = client.datasets.list_documents("dataset-uuid", cursor: page["next_cursor"])
+end
+
+# Resource-style helpers are available too.
+dataset = client.datasets.get("dataset-uuid")
+docs = dataset.list_documents(limit: 25)
+raw = dataset.download_document(docs.fetch("documents").first.fetch("id"))
+```
+
 ## Ingestion
 
 ```ruby

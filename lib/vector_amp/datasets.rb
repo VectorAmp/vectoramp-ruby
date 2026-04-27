@@ -73,6 +73,26 @@ module VectorAmp
       wrap_dataset(@transport.request(:post, "/datasets", body: body))
     end
 
+
+    # List retained source documents for a dataset using cursor pagination.
+    # @param dataset_id [String] dataset id.
+    # @param limit [Integer, nil] maximum documents to return.
+    # @param cursor [String, nil] cursor from a previous response's `next_cursor`.
+    # @param status [String, nil] optional document status filter, e.g. `ready`.
+    # @return [Hash] response envelope with `documents` and `next_cursor`.
+    def list_documents(dataset_id, limit: 50, cursor: nil, status: nil)
+      @transport.request(:get, "/datasets/#{dataset_id}/documents", query: Utils.compact_hash(limit: limit, cursor: cursor, status: status))
+    end
+
+    # Download the retained original bytes for a dataset document.
+    # The HTTP transport follows redirects so this returns the final raw object bytes.
+    # @param dataset_id [String] dataset id.
+    # @param document_id [String] document id returned by {#list_documents}.
+    # @return [String] raw document bytes.
+    def download_document(dataset_id, document_id)
+      @transport.request(:get, "/datasets/#{dataset_id}/documents/#{document_id}/download", raw: true, headers: { Accept: "*/*" })
+    end
+
     # Search a dataset by text or vector query.
     # @param dataset_id [String] dataset id.
     # @param query_text_or_options [String, Hash, nil] text query or legacy options hash.

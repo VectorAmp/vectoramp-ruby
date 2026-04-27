@@ -51,6 +51,23 @@ class VectorAmpDatasetsTest < Minitest::Test
     end
   end
 
+
+  def test_list_and_download_dataset_documents
+    raw = "\x00\x01\xFFVA".b
+    stub_request(:get, "#{API}/datasets/ds_1/documents?cursor=cur1&limit=2&status=ready")
+      .to_return_json(body: { documents: [{ id: "doc_1", file_name: "a.pdf", download_available: true }], next_cursor: "cur2", limit: 2 })
+    stub_request(:get, "#{API}/datasets/ds_1/documents/doc_1/download")
+      .to_return(status: 302, headers: { "Location" => "#{API}/raw/doc_1" })
+    stub_request(:get, "#{API}/raw/doc_1").to_return(body: raw, headers: { "Content-Type" => "application/octet-stream" })
+
+    page = @client.datasets.list_documents("ds_1", limit: 2, cursor: "cur1", status: "ready")
+    bytes = @client.datasets.download_document("ds_1", "doc_1")
+
+    assert_equal "doc_1", page.fetch("documents").first.fetch("id")
+    assert_equal "cur2", page.fetch("next_cursor")
+    assert_equal raw, bytes.b
+  end
+
   def test_search_sends_supported_options
     stub = stub_request(:post, "#{API}/datasets/ds_1/search")
            .with(body: hash_including(query_text: "hello", top_k: 5, include_metadata: false, filters: { category: "docs" }))
