@@ -18,7 +18,7 @@ module VectorAmp
         @timeout = timeout
       end
 
-      def request(method, path, query: nil, body: nil, headers: {}, stream: false, &block)
+      def request(method, path, query: nil, body: nil, headers: {}, stream: false, raw: false, &block)
         uri = build_uri(path, query)
         request = build_request(method, uri, body, headers)
 
@@ -28,7 +28,7 @@ module VectorAmp
           end
 
           response = http.request(request)
-          handle_response(response)
+          handle_response(response, raw: raw)
         end
       end
 
@@ -56,12 +56,28 @@ module VectorAmp
         request
       end
 
-      def handle_response(response)
+      def handle_response(response, raw: false)
+        return follow_redirect(response, raw: raw) if redirect?(response)
+        return response.body if raw && response.is_a?(Net::HTTPSuccess)
+
         parsed = parse_body(response.body)
         return parsed if response.is_a?(Net::HTTPSuccess)
 
         message = parsed.is_a?(Hash) ? (parsed["error"] || parsed["message"] || response.message) : response.message
         raise APIError.new(message, status: response.code.to_i, body: parsed, headers: response.to_hash)
+      end
+
+      def redirect?(response)
+        response.is_a?(Net::HTTPRedirection) && response["location"]
+      end
+
+      def follow_redirect(response, raw:)
+        uri = URI(response["location"])
+        uri = @base_uri + response["location"] unless uri.absolute?
+        request = build_request(:get, uri, nil, {})
+        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: @timeout, read_timeout: @timeout) do |http|
+          handle_response(http.request(request), raw: raw)
+        end
       end
 
       def stream_response(http, request)

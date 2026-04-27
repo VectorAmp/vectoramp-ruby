@@ -93,6 +93,23 @@ module VectorAmp
       service.stats(id)
     end
 
+
+    # List retained source documents for this dataset using cursor pagination.
+    # @param limit [Integer, nil] maximum documents to return.
+    # @param cursor [String, nil] cursor from a previous response's `next_cursor`.
+    # @param status [String, nil] optional document status filter.
+    # @return [Hash] response envelope with `documents` and `next_cursor`.
+    def list_documents(limit: 50, cursor: nil, status: nil)
+      service.list_documents(id, limit: limit, cursor: cursor, status: status)
+    end
+
+    # Download retained original bytes for a dataset source document.
+    # @param document_id [String] document id returned by {#list_documents}.
+    # @return [String] raw document bytes.
+    def download_document(document_id)
+      service.download_document(id, document_id)
+    end
+
     # Ask an intelligence question constrained to this dataset.
     # @param query [String] natural-language question.
     # @param options [Hash] forwarded to {Client#ask}; `dataset_id` is set to this dataset id.
