@@ -90,6 +90,22 @@ class VectorAmpDatasetsTest < Minitest::Test
     assert_equal [], response.fetch("results")
   end
 
+  def test_search_text_alias_sends_only_query_text
+    stub = stub_request(:post, "#{API}/datasets/ds_1/search")
+           .with { |request|
+             body = JSON.parse(request.body)
+             body["query_text"] == "rare zebra quokka" &&
+               body["top_k"] == 3 &&
+               !body.key?("sparse_query") &&
+               !body.key?("hybrid")
+           }
+           .to_return_json(body: { results: [], dataset_id: "ds_1" })
+
+    @client.datasets.search("ds_1", search_text: "rare zebra quokka", top_k: 3)
+
+    assert_requested stub
+  end
+
   def test_insert_vectors
     vectors = [{ id: "a", values: [0.1], metadata: { title: "A" } }]
     stub_request(:post, "#{API}/datasets/ds_1/insert")
