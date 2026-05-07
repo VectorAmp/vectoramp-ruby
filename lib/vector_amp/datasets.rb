@@ -98,6 +98,7 @@ module VectorAmp
     # @param query_text_or_options [String, Hash, nil] text query or legacy options hash.
     # @param query [Array<Numeric>, nil] vector query.
     # @param query_text [String, nil] explicit text query; overrides positional text when provided.
+    # @param search_text [String, nil] alias for query_text for one-field hybrid/BM25 search.
     # @param top_k [Integer] number of results; defaults to 10.
     # @param filters [Hash, nil] metadata filters.
     # @param advanced_filters [Hash, nil] advanced filter expression.
@@ -112,7 +113,7 @@ module VectorAmp
     # @param include_documents [Boolean, nil] include document fields in results.
     # @param include_metadata [Boolean, nil] include metadata; API default is true.
     # @return [Hash] search response.
-    def search(dataset_id, query_text_or_options = nil, query: nil, query_text: nil, top_k: 10, filters: nil, advanced_filters: nil,
+    def search(dataset_id, query_text_or_options = nil, query: nil, query_text: nil, search_text: nil, top_k: 10, filters: nil, advanced_filters: nil,
                embedding_model: nil, embedding_provider: nil, nprobe_override: nil, rerank_depth_override: nil,
                hybrid: nil, sparse_query: nil, alpha: nil, include_embeddings: nil, include_documents: nil,
                include_metadata: nil, **unknown)
@@ -121,7 +122,8 @@ module VectorAmp
         query_text_or_options = nil
       end
       Utils.ensure_no_unknown!(unknown, "search")
-      resolved_query_text = query_text || query_text_or_options
+      raise ArgumentError, "provide query_text or search_text, not both" if query_text && search_text
+      resolved_query_text = query_text || search_text || query_text_or_options
       body = Utils.compact_hash(
         query: query,
         query_text: resolved_query_text,
