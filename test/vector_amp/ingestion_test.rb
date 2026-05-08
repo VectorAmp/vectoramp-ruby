@@ -78,6 +78,38 @@ class VectorAmpIngestionTest < Minitest::Test
     assert_equal "src_custom", @client.sources.create_source(generic).fetch("id")
   end
 
+  def test_source_objects_expose_hash_helpers_and_new_source_defaults
+    source = VectorAmp::Source.from_api(
+      "id" => "src_1",
+      "source_type" => "gcs",
+      "name" => "gcs-docs",
+      "description" => "docs bucket",
+      "config" => { "bucket" => "docs" },
+      "metadata" => { "team" => "docs" }
+    )
+
+    assert_equal "src_1", source[:id]
+    assert_equal "gcs", source["source_type"]
+    assert_equal "docs bucket", source.to_h.fetch(:description)
+    assert_equal({ source_type: "gcs", name: "gcs-docs", description: "docs bucket", config: { "bucket" => "docs" }, metadata: { "team" => "docs" } }, source.to_create_body)
+    assert_match(/GenericSource/, source.inspect)
+
+    gcs = VectorAmp::GCSSource.new(bucket: "docs", prefix: "manuals/", project_id: "proj")
+    assert_equal "gcs", gcs.source_type
+    assert_equal "gcs-docs-manuals", gcs.name
+    assert_equal({ bucket: "docs", prefix: "manuals/", project_id: "proj" }, gcs.config)
+
+    jira = VectorAmp::JiraSource.new(cloud_id: "cloud", project_keys: ["ENG"], jql: "project = ENG", access_token: "tok", sync_mode: "full")
+    assert_equal "jira", jira.source_type
+    assert_equal "jira-ENG", jira.name
+    assert_equal true, jira.config.fetch(:include_comments)
+    assert_equal "full", jira.config.fetch(:sync_mode)
+    assert_raises(ArgumentError) { VectorAmp::GCSSource.new(bucket: "") }
+    assert_raises(ArgumentError) { VectorAmp::JiraSource.new(cloud_id: nil) }
+    assert_raises(ArgumentError) { VectorAmp::Source.new(source_type: nil, name: "x", config: {}) }
+    assert_raises(ArgumentError) { VectorAmp::Source.new(source_type: "web", name: "x", config: nil) }
+  end
+
   def test_typed_source_builders_default_names
     assert_equal "web-docs.example.com", VectorAmp::WebSource.new(start_urls: ["https://docs.example.com"]).name
     assert_equal "s3-docs-bucket-manuals", VectorAmp::S3Source.new(bucket: "docs-bucket", prefix: "manuals/").name
