@@ -98,6 +98,31 @@ module VectorAmp
     # @param metadata [Hash, nil] optional metadata.
     # @param config [Hash] additional Google Drive-source config forwarded to the API.
     # @return [Hash] created source response.
+    def create_gcs(bucket:, name: nil, prefix: nil, description: nil, metadata: nil, **config)
+      create_source(GCSSource.new(
+        bucket: bucket,
+        name: name,
+        prefix: prefix,
+        description: description,
+        metadata: metadata,
+        **config
+      ))
+    end
+
+    def create_jira(cloud_id:, name: nil, access_token: nil, project_keys: nil, jql: nil, include_comments: true, description: nil, metadata: nil, **config)
+      create_source(JiraSource.new(
+        cloud_id: cloud_id,
+        name: name,
+        access_token: access_token,
+        project_keys: project_keys,
+        jql: jql,
+        include_comments: include_comments,
+        description: description,
+        metadata: metadata,
+        **config
+      ))
+    end
+
     def create_google_drive(name: nil, folder_ids: nil, file_ids: nil, description: nil, metadata: nil, **config)
       create_source(GoogleDriveSource.new(
         name: name,
@@ -257,6 +282,8 @@ module VectorAmp
       when "file_upload" then SourceNames.file_upload
       when "web" then SourceNames.web(config[:start_urls] || config["start_urls"])
       when "s3" then SourceNames.s3(config[:bucket] || config["bucket"], config[:prefix] || config["prefix"])
+      when "gcs" then SourceNames.gcs(config[:bucket] || config["bucket"], config[:prefix] || config["prefix"])
+      when "jira" then SourceNames.jira(project_keys: config[:project_keys] || config["project_keys"], cloud_id: config[:cloud_id] || config["cloud_id"])
       when "gdrive" then SourceNames.google_drive(folder_ids: config[:folder_ids] || config["folder_ids"], file_ids: config[:file_ids] || config["file_ids"])
       end
     end

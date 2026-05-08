@@ -10,7 +10,7 @@ module VectorAmp
   # create a source or to `dataset.ingest_source(source)` once they include an id
   # returned by the API.
   class Source
-    SUPPORTED_SOURCE_TYPES = %w[s3 web gdrive file_upload].freeze
+    SUPPORTED_SOURCE_TYPES = %w[s3 web gcs gdrive file_upload jira].freeze
 
     # @return [String, nil] API source id when returned by the API.
     # @return [String] source type (`s3`, `web`, `gdrive`, or `file_upload`).
@@ -130,6 +130,16 @@ module VectorAmp
       parts.join("-")
     end
 
+    def gcs(bucket, prefix = nil)
+      parts = ["gcs", bucket.to_s, prefix.to_s.delete_suffix("/")].reject(&:empty?)
+      parts.join("-")
+    end
+
+    def jira(project_keys: nil, cloud_id: nil)
+      key = Array(project_keys).first || cloud_id
+      key ? "jira-#{key}" : "jira-source"
+    end
+
     # @param folder_ids [String, Array<String>, nil] folder ids.
     # @param file_ids [String, Array<String>, nil] file ids.
     # @return [String] `google-drive-<first id>` or `google-drive-source`.
@@ -189,6 +199,22 @@ module VectorAmp
     end
   end
 
+  # Google Cloud Storage ingestion source.
+  class GCSSource < Source
+    def initialize(bucket:, name: nil, prefix: nil, description: nil, metadata: nil, id: nil, **config)
+      raise ArgumentError, "bucket is required" if bucket.nil? || bucket.to_s.empty?
+
+      super(
+        id: id,
+        source_type: "gcs",
+        name: name || SourceNames.gcs(bucket, prefix),
+        description: description,
+        metadata: metadata,
+        config: Utils.compact_hash(config.merge(bucket: bucket, prefix: prefix))
+      )
+    end
+  end
+
   # Google Drive ingestion source.
   class GoogleDriveSource < Source
     # @param name [String, nil] defaults to `google-drive-<first id>` or `google-drive-source`.
@@ -233,6 +259,22 @@ module VectorAmp
         description: description,
         metadata: metadata,
         config: Utils.compact_hash(config.merge(storage_provider: storage_provider, sync_mode: sync_mode))
+      )
+    end
+  end
+
+  # Jira ingestion source. include_comments defaults to true.
+  class JiraSource < Source
+    def initialize(cloud_id:, name: nil, access_token: nil, project_keys: nil, jql: nil, include_comments: true, description: nil, metadata: nil, id: nil, **config)
+      raise ArgumentError, "cloud_id is required" if cloud_id.nil? || cloud_id.to_s.empty?
+
+      super(
+        id: id,
+        source_type: "jira",
+        name: name || SourceNames.jira(project_keys: project_keys, cloud_id: cloud_id),
+        description: description,
+        metadata: metadata,
+        config: Utils.compact_hash(config.merge(cloud_id: cloud_id, access_token: access_token, project_keys: project_keys, jql: jql, include_comments: include_comments))
       )
     end
   end

@@ -142,15 +142,25 @@ client.ingestion.list_sources(limit: 50, offset: 0)
 client.ingestion.get_source("source-uuid")
 
 # Typed builders cover the supported source_type values:
-# "web", "s3", "gdrive", and "file_upload".
+# "web", "s3", "gcs", "gdrive", "file_upload", and "jira".
 source = client.sources.create_web(
   start_urls: ["https://docs.example.com"],
-  max_depth: 1
+  max_depth: 1,
+  include_assets: true,
+  max_assets_per_page: 5
 )
 
 s3_source = client.sources.create_s3(
   bucket: "vectoramp-docs",
   prefix: "public/"
+)
+
+gcs_source = client.sources.create_gcs(bucket: "vectoramp-docs-gcs", prefix: "public/")
+
+jira_source = client.sources.create_jira(
+  cloud_id: "atlassian-cloud-id",
+  project_keys: ["ENG"],
+  include_comments: true # default
 )
 
 gdrive_source = client.sources.create_google_drive(
