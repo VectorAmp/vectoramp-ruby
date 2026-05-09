@@ -157,6 +157,13 @@ module VectorAmp
       @transport.request(:get, "/ingestion/jobs/#{job_id}")
     end
 
+    # Retry an eligible failed or cancelled ingestion job as a fresh full rerun.
+    # @param job_id [String] original job id.
+    # @return [Hash] newly queued retry job response.
+    def retry_job(job_id)
+      @transport.request(:post, "/ingestion/jobs/#{job_id}/retry")
+    end
+
     # List files attached to an ingestion job.
     # @param job_id [String] job id.
     # @return [Hash] files response.
