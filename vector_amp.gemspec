@@ -24,7 +24,9 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_development_dependency "minitest", "~> 5.25"
+  spec.add_development_dependency "minitest-reporters", "~> 1.7"
   spec.add_development_dependency "rake", "~> 13.2"
   spec.add_development_dependency "simplecov", "~> 0.22"
+  spec.add_development_dependency "simplecov-cobertura", "~> 2.1"
   spec.add_development_dependency "webmock", "~> 3.25"
 end
