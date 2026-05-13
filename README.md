@@ -1,5 +1,8 @@
 # VectorAmp Ruby SDK
 
+[![pipeline status](https://gitlab.com/VectorAmp/SDK/Ruby/badges/main/pipeline.svg)](https://gitlab.com/VectorAmp/SDK/Ruby/-/commits/main)
+[![coverage report](https://gitlab.com/VectorAmp/SDK/Ruby/badges/main/coverage.svg)](https://gitlab.com/VectorAmp/SDK/Ruby/-/commits/main)
+
 Official Ruby client for the VectorAmp API.
 
 - Default API: `https://api.vectoramp.com`
