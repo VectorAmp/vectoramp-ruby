@@ -4,6 +4,7 @@ require_relative "datasets"
 require_relative "error"
 require_relative "ingestion"
 require_relative "intelligence"
+require_relative "schedules"
 require_relative "source"
 require_relative "transport/http"
 
@@ -16,7 +17,7 @@ module VectorAmp
     # @return [DatasetsResource] dataset API resource.
     # @return [IngestionResource] ingestion/source API resource.
     # @return [IntelligenceResource] intelligence API resource.
-    attr_reader :base_url, :datasets, :ingestion, :intelligence, :sources
+    attr_reader :base_url, :datasets, :ingestion, :intelligence, :schedules, :sources
 
     # Create a VectorAmp API client.
     # @param api_key [String] API key; defaults to ENV["VECTORAMP_API_KEY"].
@@ -32,6 +33,7 @@ module VectorAmp
       @transport = transport || Transport::HTTP.new(base_url: base_url, api_key: api_key, timeout: timeout)
       @ingestion = IngestionResource.new(@transport)
       @sources = @ingestion
+      @schedules = SchedulesResource.new(@transport)
       @intelligence = IntelligenceResource.new(@transport)
       @datasets = DatasetsResource.new(@transport, client: self)
     end
