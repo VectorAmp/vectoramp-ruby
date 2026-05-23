@@ -36,7 +36,7 @@ dataset = client.datasets.create(
   metric: "cosine",
   embedding: {
     provider: "vectoramp",
-    model: "VectorAmp-Embedding-2560"
+    model: "VectorAmp-Embedding-4B"
   }
 )
 
