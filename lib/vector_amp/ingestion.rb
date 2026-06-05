@@ -45,7 +45,7 @@ module VectorAmp
         config: config,
         metadata: metadata
       )
-      @transport.request(:post, "/v1/sources", body: body)
+      @transport.request(:post, "/ingestion/sources", body: body)
     end
 
     # Alias for {#create_source}.
@@ -230,7 +230,10 @@ module VectorAmp
 
       init = init_upload(source_id, files)
       upload_files_to_presigned_urls(files, init.fetch("uploads"))
-      complete_upload(source_id, job_id: init.fetch("job_id"), file_ids: init.fetch("uploads").map { |upload| upload.fetch("file_id") })
+      job_id = init.fetch("job_id")
+      response = complete_upload(source_id, job_id: job_id, file_ids: init.fetch("uploads").map { |upload| upload.fetch("file_id") })
+      response["job_id"] ||= job_id if response.is_a?(Hash)
+      response
     end
 
     # Initialize presigned uploads for source files.
@@ -246,7 +249,7 @@ module VectorAmp
           content_type: content_type_for(path)
         }
       end
-      @transport.request(:post, "/v1/sources/#{source_id}/upload/init", body: { files: payload })
+      @transport.request(:post, "/ingestion/sources/#{source_id}/upload/init", body: { files: payload })
     end
 
     # Complete a file upload job after files have been PUT to presigned URLs.
@@ -255,7 +258,7 @@ module VectorAmp
     # @param file_ids [Array<String>] file ids from {#init_upload}.
     # @return [Hash] upload completion/job response.
     def complete_upload(source_id, job_id:, file_ids:)
-      @transport.request(:post, "/v1/sources/#{source_id}/upload/complete", body: { job_id: job_id, file_ids: file_ids })
+      @transport.request(:post, "/ingestion/sources/#{source_id}/upload/complete", body: { job_id: job_id, file_ids: file_ids })
     end
 
     private
