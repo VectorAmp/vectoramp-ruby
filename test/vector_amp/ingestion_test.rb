@@ -22,7 +22,7 @@ class VectorAmpIngestionTest < Minitest::Test
 
   def test_source_and_job_helpers
     stub_request(:get, "#{API}/ingestion/sources/src_1").to_return_json(body: { id: "src_1" })
-    stub_request(:post, "#{API}/v1/sources")
+    stub_request(:post, "#{API}/ingestion/sources")
       .with(body: hash_including(source_type: "web", name: "site", config: { start_urls: ["https://example.com"] }))
       .to_return_json(status: 201, body: { id: "src_2" })
     stub_request(:post, "#{API}/ingestion/jobs")
@@ -57,19 +57,19 @@ class VectorAmpIngestionTest < Minitest::Test
     )
     assert_equal "custom", generic.source_type
 
-    stub_request(:post, "#{API}/v1/sources")
+    stub_request(:post, "#{API}/ingestion/sources")
       .with(body: { source_type: "web", name: "docs", config: { start_urls: ["https://docs.example.com"], max_depth: 2 } })
       .to_return_json(status: 201, body: { id: "src_web" })
-    stub_request(:post, "#{API}/v1/sources")
+    stub_request(:post, "#{API}/ingestion/sources")
       .with(body: { source_type: "s3", name: "bucket", config: { bucket: "docs-bucket", prefix: "manuals/", region: "us-east-1" } })
       .to_return_json(status: 201, body: { id: "src_s3" })
-    stub_request(:post, "#{API}/v1/sources")
+    stub_request(:post, "#{API}/ingestion/sources")
       .with(body: { source_type: "gdrive", name: "drive", config: { folder_ids: ["folder_1"] } })
       .to_return_json(status: 201, body: { id: "src_drive" })
-    stub_request(:post, "#{API}/v1/sources")
+    stub_request(:post, "#{API}/ingestion/sources")
       .with(body: { source_type: "file_upload", name: "upload", config: { storage_provider: "s3", sync_mode: "full" } })
       .to_return_json(status: 201, body: { id: "src_upload" })
-    stub_request(:post, "#{API}/v1/sources")
+    stub_request(:post, "#{API}/ingestion/sources")
       .with(body: { source_type: "custom", name: "custom-source", config: { endpoint: "https://example.com/feed" } })
       .to_return_json(status: 201, body: { id: "src_custom" })
 
@@ -88,7 +88,7 @@ class VectorAmpIngestionTest < Minitest::Test
   end
 
   def test_create_source_defaults_known_source_names
-    stub_request(:post, "#{API}/v1/sources")
+    stub_request(:post, "#{API}/ingestion/sources")
       .with(body: hash_including(source_type: "web", name: "web-docs.example.com", config: { start_urls: ["https://docs.example.com"] }))
       .to_return_json(status: 201, body: { id: "src_web" })
 
@@ -106,7 +106,7 @@ class VectorAmpIngestionTest < Minitest::Test
     file.write("hello")
     file.close
 
-    stub_request(:post, "#{API}/v1/sources")
+    stub_request(:post, "#{API}/ingestion/sources")
       .with { |request|
         body = JSON.parse(request.body)
         body["source_type"] == "file_upload" &&
@@ -114,11 +114,11 @@ class VectorAmpIngestionTest < Minitest::Test
           body["metadata"] == { "dataset_id" => "ds_1", "project" => "docs" }
       }
       .to_return_json(status: 201, body: { id: "src_1" })
-    stub_request(:post, "#{API}/v1/sources/src_1/upload/init")
+    stub_request(:post, "#{API}/ingestion/sources/src_1/upload/init")
       .with { |request| JSON.parse(request.body).fetch("files").first.fetch("content_type") == "text/plain" }
       .to_return_json(body: { job_id: "job_1", uploads: [{ file_id: "file_1", file_name: File.basename(file.path), upload_url: "https://uploads.test/file_1" }] })
     upload = stub_request(:put, "https://uploads.test/file_1").with(body: "hello").to_return(status: 200, body: "")
-    stub_request(:post, "#{API}/v1/sources/src_1/upload/complete")
+    stub_request(:post, "#{API}/ingestion/sources/src_1/upload/complete")
       .with(body: { job_id: "job_1", file_ids: ["file_1"] })
       .to_return_json(body: { job_id: "job_1", status: "pending" })
 
