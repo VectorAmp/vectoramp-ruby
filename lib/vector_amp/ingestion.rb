@@ -205,7 +205,10 @@ module VectorAmp
 
       init = init_upload(source_id, files)
       upload_files_to_presigned_urls(files, init.fetch("uploads"))
-      complete_upload(source_id, job_id: init.fetch("job_id"), file_ids: init.fetch("uploads").map { |upload| upload.fetch("file_id") })
+      job_id = init.fetch("job_id")
+      response = complete_upload(source_id, job_id: job_id, file_ids: init.fetch("uploads").map { |upload| upload.fetch("file_id") })
+      response["job_id"] ||= job_id if response.is_a?(Hash)
+      response
     end
 
     # Initialize presigned uploads for source files.
