@@ -70,10 +70,10 @@ class VectorAmpDatasetsTest < Minitest::Test
 
   def test_search_sends_supported_options
     stub = stub_request(:post, "#{API}/datasets/ds_1/search")
-           .with(body: hash_including(query_text: "hello", top_k: 5, include_metadata: false, filters: { category: "docs" }))
+           .with(body: hash_including(query_text: "hello", top_k: 5, include_metadata: false, filters: { category: "docs" }, rerank: true))
            .to_return_json(body: { results: [], dataset_id: "ds_1" })
 
-    response = @client.datasets.search("ds_1", query_text: "hello", top_k: 5, filters: { category: "docs" }, include_metadata: false)
+    response = @client.datasets.search("ds_1", query_text: "hello", top_k: 5, filters: { category: "docs" }, include_metadata: false, rerank: true)
 
     assert_requested stub
     assert_equal [], response.fetch("results")
@@ -139,7 +139,7 @@ class VectorAmpDatasetsTest < Minitest::Test
     vectors = [{ id: "a", values: [0.1], metadata: { title: "A" } }]
 
     stub_request(:post, "#{API}/datasets/ds_1/search")
-      .with(body: hash_including(query_text: "hello"))
+      .with(body: hash_including(query_text: "hello", rerank: { enabled: true }))
       .to_return_json(body: { results: ["hit"] })
     stub_request(:post, "#{API}/datasets/ds_1/insert")
       .with(body: { vectors: vectors })
@@ -149,7 +149,7 @@ class VectorAmpDatasetsTest < Minitest::Test
       .to_return_json(body: { answer: "42" })
     stub_request(:get, "#{API}/datasets/ds_1/stats").to_return_json(body: { vector_count: 1 })
 
-    assert_equal ["hit"], dataset.search("hello").fetch("results")
+    assert_equal ["hit"], dataset.search("hello", rerank: { enabled: true }).fetch("results")
     assert_equal 1, dataset.insert(vectors: vectors).fetch("inserted")
     assert_equal "42", dataset.ask("question").fetch("answer")
     assert_equal 1, dataset.stats.fetch("vector_count")
