@@ -112,11 +112,12 @@ module VectorAmp
     # @param include_embeddings [Boolean, nil] include vector values in results.
     # @param include_documents [Boolean, nil] include document fields in results.
     # @param include_metadata [Boolean, nil] include metadata; API default is true.
+    # @param rerank [Boolean, Hash, nil] enable semantic reranking. `true` or `{ enabled: true }` uses vectoramp / VectorAmp-Rerank-v1.
     # @return [Hash] search response.
     def search(dataset_id, query_text_or_options = nil, query: nil, query_text: nil, search_text: nil, top_k: 10, filters: nil, advanced_filters: nil,
                embedding_model: nil, embedding_provider: nil, nprobe_override: nil, rerank_depth_override: nil,
                hybrid: nil, sparse_query: nil, alpha: nil, include_embeddings: nil, include_documents: nil,
-               include_metadata: nil, **unknown)
+               include_metadata: nil, rerank: nil, **unknown)
       if query_text_or_options.is_a?(Hash)
         unknown = query_text_or_options.merge(unknown)
         query_text_or_options = nil
@@ -139,7 +140,8 @@ module VectorAmp
         alpha: alpha,
         include_embeddings: include_embeddings,
         include_documents: include_documents,
-        include_metadata: include_metadata
+        include_metadata: include_metadata,
+        rerank: rerank
       )
       @transport.request(:post, "/datasets/#{dataset_id}/search", body: body)
     end

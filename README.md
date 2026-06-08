@@ -95,7 +95,8 @@ dataset.search(
     { field: "price", op: "lt", value: 100.0 }
   ],
   include_metadata: true,
-  include_documents: false
+  include_documents: false,
+  rerank: { enabled: true } # vectoramp / VectorAmp-Rerank-v1
 )
 dataset.insert(vectors: [{ id: "sku-1", values: [0.1, 0.2], metadata: { category: "electronics" } }])
 dataset.add_texts(["Wireless headphones"], metadata: { category: "electronics" })
