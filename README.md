@@ -236,6 +236,23 @@ answer = client.ask(
 puts answer["answer"]
 ```
 
+Multi-turn conversations: the Intelligence API is stateless, so send prior turns
+in `conversation_history`. You decide how many previous messages to include.
+
+```ruby
+history = [
+  { role: "user", content: "What are the key features?" },
+  { role: "assistant", content: "Hybrid search, reranking, and managed ingestion." }
+]
+
+follow_up = client.intelligence.query(
+  "Which of those help with relevance?",
+  dataset_id: "all",
+  conversation_history: history.last(10) # include as many prior turns as you want
+)
+puts follow_up["answer"]
+```
+
 Streaming SSE:
 
 ```ruby

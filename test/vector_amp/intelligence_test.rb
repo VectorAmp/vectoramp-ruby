@@ -19,6 +19,29 @@ class VectorAmpIntelligenceTest < Minitest::Test
     assert_equal "42", response.fetch("answer")
   end
 
+  def test_multi_turn_sends_conversation_history
+    history = [
+      { role: "user", content: "What is VectorAmp?" },
+      { role: "assistant", content: "A vector database platform." }
+    ]
+    stub_request(:post, "#{API}/intelligence/query")
+      .with(body: {
+        query: "Does it support hybrid search?",
+        dataset_id: "ds_1",
+        conversation_history: history,
+        stream: false
+      })
+      .to_return_json(body: { answer: "Yes.", sources: [], chunks: [], metadata: {} })
+
+    response = @client.intelligence.query(
+      "Does it support hybrid search?",
+      dataset_id: "ds_1",
+      conversation_history: history
+    )
+
+    assert_equal "Yes.", response.fetch("answer")
+  end
+
   def test_streaming_ask_yields_sse_events
     body = <<~SSE
       data: {"chunk_type":"text","content":"hello","metadata":{}}
