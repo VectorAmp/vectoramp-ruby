@@ -2,6 +2,7 @@
 
 require "securerandom"
 require_relative "dataset"
+require_relative "embedding"
 require_relative "utils"
 
 module VectorAmp
@@ -45,30 +46,48 @@ module VectorAmp
     end
 
     # Create a SABLE dataset. `index_type` is managed by the SDK and always sent as `sable`.
+    #
+    # Only `name` is required. The embedding defaults to the managed
+    # `vectoramp/VectorAmp-Embedding-4B` model and the dimension is inferred
+    # (2560 for the default model). Pass `embedding:` (a Hash or model String, or
+    # the result of {VectorAmp::Embedding.openai}) to use a different model; if
+    # the model's dimension is not known to the SDK you must also pass `dim:`.
+    #
     # @param name [String] dataset name.
-    # @param dim [Integer] embedding/vector dimension.
-    # @param embedding [Hash, String] embedding configuration accepted by the API.
+    # @param dim [Integer, nil] embedding/vector dimension; inferred when omitted for known models.
+    # @param embedding [Hash, String, nil] embedding configuration; defaults to the managed VectorAmp model.
     # @param metric [String] distance metric; defaults to `cosine`.
+    # @param hybrid [Boolean, nil] enable hybrid (dense + sparse) search; sends `hybrid: true`.
     # @param filters [Hash, nil] optional filter schema/config.
     # @param metadata_schema [Hash, nil] optional metadata schema.
     # @param tuning [Hash, nil] optional SABLE tuning parameters.
+    # @param metadata [Hash, nil] optional dataset metadata.
     # @return [Dataset] created dataset.
-    # @raise [ArgumentError] when `index_type` is supplied or unknown options are passed.
-    def create(name:, dim:, embedding:, metric: "cosine", filters: nil, metadata_schema: nil, tuning: nil, **unknown)
+    # @raise [ArgumentError] when `index_type` is supplied, dim cannot be inferred, or unknown options are passed.
+    def create(name:, dim: nil, embedding: nil, metric: "cosine", hybrid: nil, filters: nil, metadata_schema: nil, tuning: nil, metadata: nil, **unknown)
       if unknown.key?(:index_type) || unknown.key?("index_type")
         raise ArgumentError, "index_type is managed by VectorAmp Ruby SDK and is always 'sable'"
       end
       Utils.ensure_no_unknown!(unknown, "create")
 
+      resolved_embedding = Embedding.normalize(embedding)
+      resolved_dim = dim || Embedding.infer_dim(resolved_embedding)
+      if resolved_dim.nil?
+        model = resolved_embedding[:model] || resolved_embedding["model"]
+        raise ArgumentError, "dim is required for embedding model #{model.inspect}; pass dim: explicitly"
+      end
+
       body = Utils.compact_hash(
         name: name,
-        dim: dim,
+        dim: resolved_dim,
         metric: metric,
-        embedding: embedding,
+        embedding: resolved_embedding,
         index_type: "sable",
+        hybrid: hybrid,
         filters: filters,
         metadata_schema: metadata_schema,
-        tuning: tuning
+        tuning: tuning,
+        metadata: metadata
       )
       wrap_dataset(@transport.request(:post, "/datasets", body: body))
     end
@@ -147,11 +166,14 @@ module VectorAmp
     end
 
     # Insert vectors into a dataset.
+    #
+    # Vector record ids may be strings or integers. Integer ids are preserved as
+    # JSON numbers (not coerced to strings) so the API does not rewrite them.
     # @param dataset_id [String] dataset id.
     # @param vectors [Array<Hash>] vector records with ids, values, and optional metadata.
     # @return [Hash] insert response.
     def insert(dataset_id, vectors:)
-      @transport.request(:post, "/datasets/#{dataset_id}/insert", body: { vectors: vectors })
+      @transport.request(:post, "/datasets/#{dataset_id}/insert", body: { vectors: Utils.normalize_vectors(vectors) })
     end
 
     # Generate embeddings using the dataset embedding configuration.
@@ -166,15 +188,19 @@ module VectorAmp
     end
 
     # Embed and insert texts into a dataset.
+    #
+    # Accepts a single string or a list of strings. Ids are auto-generated when
+    # omitted; supplied ids may be strings or integers, and integer ids are
+    # preserved as JSON numbers. The source text is copied into `metadata.text`.
     # @param dataset_id [String] dataset id.
-    # @param texts_arg [Array<String>, nil] positional texts for convenience.
-    # @param texts [Array<String>, nil] keyword texts.
-    # @param ids [Array<String>, nil] optional ids; generated UUIDs when omitted.
+    # @param texts_arg [String, Array<String>, nil] positional text(s) for convenience.
+    # @param texts [String, Array<String>, nil] keyword text(s).
+    # @param ids [Array, nil] optional ids; generated UUIDs when omitted.
     # @param metadata [Hash, Array<Hash>, nil] metadata applied to all texts or per-text.
     # @return [Hash] insert response.
     def add_texts(dataset_id, texts_arg = nil, texts: nil, ids: nil, metadata: nil)
-      texts ||= texts_arg
-      raise ArgumentError, "texts must not be empty" if texts.nil? || texts.empty?
+      texts = Array(texts || texts_arg)
+      raise ArgumentError, "texts must not be empty" if texts.empty?
       raise ArgumentError, "ids length must match texts length" if ids && ids.length != texts.length
       if metadata.is_a?(Array) && metadata.length != texts.length
         raise ArgumentError, "metadata length must match texts length"
@@ -185,7 +211,7 @@ module VectorAmp
       vectors = texts.each_with_index.map do |text, index|
         item_metadata = metadata.is_a?(Array) ? metadata[index] : metadata
         {
-          id: ids ? ids[index] : SecureRandom.uuid,
+          id: ids ? Utils.coerce_vector_id(ids[index]) : SecureRandom.uuid,
           values: embeddings[index],
           metadata: Utils.compact_hash((item_metadata || {}).merge(text: text))
         }

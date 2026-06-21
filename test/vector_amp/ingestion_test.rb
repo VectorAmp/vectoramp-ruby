@@ -133,6 +133,62 @@ class VectorAmpIngestionTest < Minitest::Test
     assert_raises(ArgumentError) { VectorAmp::GoogleDriveSource.new(name: "drive") }
   end
 
+  def test_confluence_source_builder
+    confluence = VectorAmp::ConfluenceSource.new(
+      cloud_id: "cloud-123",
+      spaces: ["ENG"],
+      username: "service-account@example.com",
+      api_token: "tok"
+    )
+
+    assert_equal "confluence", confluence.source_type
+    assert_equal "confluence-ENG", confluence.name
+    assert_equal "basic", confluence.config.fetch(:auth_mode)
+    assert_equal false, confluence.config.fetch(:include_attachments)
+    assert_equal ["ENG"], confluence.config.fetch(:spaces)
+    assert_includes VectorAmp::Source::SUPPORTED_SOURCE_TYPES, "confluence"
+
+    # Names fall back to host then cloud_id.
+    assert_equal "confluence-company.atlassian.net",
+                 VectorAmp::ConfluenceSource.new(base_url: "https://company.atlassian.net").name
+    assert_equal "confluence-cloud-123",
+                 VectorAmp::ConfluenceSource.new(cloud_id: "cloud-123").name
+
+    assert_raises(ArgumentError) { VectorAmp::ConfluenceSource.new }
+  end
+
+  def test_create_confluence_helper_posts_source
+    stub = stub_request(:post, "#{API}/ingestion/sources")
+           .with { |request|
+             body = JSON.parse(request.body)
+             body["source_type"] == "confluence" &&
+               body["name"] == "confluence-ENG" &&
+               body["config"]["cloud_id"] == "cloud-123" &&
+               body["config"]["spaces"] == ["ENG"] &&
+               body["config"]["auth_mode"] == "basic"
+           }
+           .to_return_json(status: 201, body: { id: "src_conf" })
+
+    response = @client.sources.create_confluence(
+      cloud_id: "cloud-123",
+      spaces: ["ENG"],
+      username: "service-account@example.com",
+      api_token: "tok"
+    )
+
+    assert_requested stub
+    assert_equal "src_conf", response.fetch("id")
+  end
+
+  def test_create_source_defaults_confluence_name
+    stub_request(:post, "#{API}/ingestion/sources")
+      .with(body: hash_including(source_type: "confluence", name: "confluence-ENG"))
+      .to_return_json(status: 201, body: { id: "src_conf" })
+
+    assert_equal "src_conf",
+                 @client.sources.create_source(source_type: "confluence", config: { cloud_id: "c", spaces: ["ENG"] }).fetch("id")
+  end
+
   def test_ingest_files_uploads_to_presigned_url_and_completes
     file = Tempfile.new(["vectoramp", ".txt"])
     file.write("hello")

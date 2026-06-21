@@ -11,15 +11,15 @@ Gem::Specification.new do |spec|
   spec.summary = "Ruby SDK for the VectorAmp API"
   spec.description = "Official Ruby client for VectorAmp datasets, ingestion, and intelligence APIs."
   spec.homepage = "https://vectoramp.com"
-  spec.license = "MIT"
+  spec.license = "Apache-2.0"
   spec.required_ruby_version = ">= 3.1"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://gitlab.com/VectorAmp/SDK/Ruby"
-  spec.metadata["changelog_uri"] = "https://gitlab.com/VectorAmp/SDK/Ruby/-/releases"
+  spec.metadata["source_code_uri"] = "https://github.com/vectoramp/vectoramp-ruby"
+  spec.metadata["changelog_uri"] = "https://github.com/vectoramp/vectoramp-ruby/releases"
   spec.metadata["rubygems_mfa_required"] = "true"
 
-  spec.files = Dir["lib/**/*.rb", "README.md", "LICENSE.txt"]
+  spec.files = Dir["lib/**/*.rb", "README.md", "LICENSE", "NOTICE"]
   spec.bindir = "exe"
   spec.require_paths = ["lib"]
 

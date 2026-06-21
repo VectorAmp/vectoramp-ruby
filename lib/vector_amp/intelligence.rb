@@ -41,5 +41,61 @@ module VectorAmp
         @transport.request(:post, "/intelligence/query", body: body)
       end
     end
+
+    # Create an intelligence conversation session.
+    # @param title [String, nil] optional session title.
+    # @param dataset_id [String, nil] optional dataset scope.
+    # @param workspace_id [String, nil] optional workspace id.
+    # @param metadata [Hash, nil] optional session metadata.
+    # @return [Hash] created session.
+    def create_session(title: nil, dataset_id: nil, workspace_id: nil, metadata: nil)
+      body = Utils.compact_hash(
+        title: title,
+        dataset_id: dataset_id,
+        workspace_id: workspace_id,
+        metadata: metadata
+      )
+      @transport.request(:post, "/intelligence/sessions", body: body)
+    end
+
+    # List intelligence sessions.
+    # @param limit [Integer] page size; defaults to 50.
+    # @return [Hash] response envelope with `sessions`.
+    def list_sessions(limit: 50)
+      @transport.request(:get, "/intelligence/sessions", query: { limit: limit })
+    end
+
+    # Fetch an intelligence session.
+    # @param session_id [String] session id.
+    # @return [Hash] session resource.
+    def get_session(session_id)
+      @transport.request(:get, "/intelligence/sessions/#{session_id}")
+    end
+
+    # Delete an intelligence session.
+    # @param session_id [String] session id.
+    # @return [Hash] delete response.
+    def delete_session(session_id)
+      @transport.request(:delete, "/intelligence/sessions/#{session_id}")
+    end
+
+    # Append a message to a session.
+    # @param session_id [String] session id.
+    # @param role [String] message role: `user`, `assistant`, `system`, or `tool`.
+    # @param content [String] message content.
+    # @param metadata [Hash, nil] optional message metadata.
+    # @return [Hash] created message.
+    def append_message(session_id, role:, content:, metadata: nil)
+      body = Utils.compact_hash(role: role, content: content, metadata: metadata)
+      @transport.request(:post, "/intelligence/sessions/#{session_id}/messages", body: body)
+    end
+
+    # List messages in a session.
+    # @param session_id [String] session id.
+    # @param limit [Integer] page size; defaults to 100.
+    # @return [Hash] response envelope with `messages`.
+    def list_messages(session_id, limit: 100)
+      @transport.request(:get, "/intelligence/sessions/#{session_id}/messages", query: { limit: limit })
+    end
   end
 end

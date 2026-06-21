@@ -51,6 +51,109 @@ class VectorAmpDatasetsTest < Minitest::Test
     end
   end
 
+  def test_create_with_name_only_uses_managed_defaults
+    stub = stub_request(:post, "#{API}/datasets")
+           .with { |request|
+             body = JSON.parse(request.body)
+             body["name"] == "docs" &&
+               body["dim"] == 2560 &&
+               body["metric"] == "cosine" &&
+               body["index_type"] == "sable" &&
+               body["embedding"] == { "provider" => "vectoramp", "model" => "VectorAmp-Embedding-4B" } &&
+               !body.key?("hybrid")
+           }
+           .to_return_json(status: 201, body: { id: "ds_1", index_type: "sable" })
+
+    response = @client.datasets.create(name: "docs")
+
+    assert_requested stub
+    assert_equal "ds_1", response.id
+  end
+
+  def test_create_hybrid_sends_hybrid_true
+    stub = stub_request(:post, "#{API}/datasets")
+           .with(body: hash_including(name: "docs", hybrid: true, index_type: "sable", dim: 2560))
+           .to_return_json(status: 201, body: { id: "ds_1" })
+
+    @client.datasets.create(name: "docs", hybrid: true)
+
+    assert_requested stub
+  end
+
+  def test_create_with_openai_embedding_infers_dim
+    stub = stub_request(:post, "#{API}/datasets")
+           .with(body: hash_including(
+             name: "docs",
+             dim: 3072,
+             embedding: { provider: "openai", model: "text-embedding-3-large" }
+           ))
+           .to_return_json(status: 201, body: { id: "ds_1" })
+
+    @client.datasets.create(name: "docs", embedding: VectorAmp::Embedding.openai("large"))
+
+    assert_requested stub
+  end
+
+  def test_create_requires_dim_for_unknown_model
+    error = assert_raises(ArgumentError) do
+      @client.datasets.create(name: "docs", embedding: { provider: "acme", model: "acme-embed" })
+    end
+    assert_match(/dim is required/, error.message)
+  end
+
+  def test_insert_preserves_numeric_ids_as_numbers
+    stub = stub_request(:post, "#{API}/datasets/ds_1/insert")
+           .with { |request|
+             vectors = JSON.parse(request.body).fetch("vectors")
+             # Numeric ids must serialize as JSON numbers, not strings.
+             request.body.include?('"id":1') &&
+               request.body.include?('"id":2.5') &&
+               vectors[0]["id"] == 1 &&
+               vectors[1]["id"] == "doc-3" &&
+               vectors[2]["id"] == 2.5
+           }
+           .to_return_json(body: { inserted: 3 })
+
+    @client.datasets.insert("ds_1", vectors: [
+      { id: 1, values: [0.1] },
+      { id: "doc-3", values: [0.2] },
+      { id: 2.5, values: [0.3] }
+    ])
+
+    assert_requested stub
+  end
+
+  def test_add_texts_preserves_numeric_ids
+    stub_request(:post, "#{API}/datasets/ds_1/embed")
+      .with(body: { texts: %w[alpha beta] })
+      .to_return_json(body: { embeddings: [[0.1], [0.2]] })
+    insert = stub_request(:post, "#{API}/datasets/ds_1/insert")
+             .with { |request|
+               vectors = JSON.parse(request.body).fetch("vectors")
+               request.body.include?('"id":10') &&
+                 vectors[0]["id"] == 10 &&
+                 vectors[1]["id"] == 11
+             }
+             .to_return_json(body: { inserted: 2 })
+
+    @client.datasets.add_texts("ds_1", %w[alpha beta], ids: [10, 11])
+
+    assert_requested insert
+  end
+
+  def test_add_texts_accepts_single_string
+    stub_request(:post, "#{API}/datasets/ds_1/embed")
+      .with(body: { texts: ["solo"] })
+      .to_return_json(body: { embeddings: [[0.1]] })
+    insert = stub_request(:post, "#{API}/datasets/ds_1/insert")
+             .with { |request| JSON.parse(request.body).fetch("vectors").length == 1 }
+             .to_return_json(body: { inserted: 1 })
+
+    @client.datasets.add_texts("ds_1", "solo")
+
+    assert_requested insert
+  end
+
 
   def test_list_and_download_dataset_documents
     raw = "\x00\x01\xFFVA".b

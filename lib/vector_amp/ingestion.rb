@@ -134,6 +134,36 @@ module VectorAmp
       ))
     end
 
+    # Create a Confluence source.
+    # @param cloud_id [String, nil] Atlassian OAuth cloud/site id; required unless base_url is given.
+    # @param base_url [String, nil] Confluence base URL, e.g. https://company.atlassian.net.
+    # @param name [String, nil] defaults to `confluence-<space>`/`confluence-<host>`/`confluence-source`.
+    # @param auth_mode [String] `basic` (default) or `oauth`.
+    # @param username [String, nil] username for basic auth.
+    # @param api_token [String, nil] API token for basic auth.
+    # @param spaces [String, Array<String>, nil] space keys to ingest; empty means all accessible.
+    # @param include_attachments [Boolean] include page attachments; defaults to false.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param config [Hash] additional Confluence-source config forwarded to the API.
+    # @return [Hash] created source response.
+    def create_confluence(cloud_id: nil, base_url: nil, name: nil, auth_mode: "basic", username: nil, api_token: nil,
+                          spaces: nil, include_attachments: false, description: nil, metadata: nil, **config)
+      create_source(ConfluenceSource.new(
+        cloud_id: cloud_id,
+        base_url: base_url,
+        name: name,
+        auth_mode: auth_mode,
+        username: username,
+        api_token: api_token,
+        spaces: spaces,
+        include_attachments: include_attachments,
+        description: description,
+        metadata: metadata,
+        **config
+      ))
+    end
+
     # Create a file-upload source.
     # @param name [String, nil] defaults to timestamped `ruby-sdk-file-upload-YYYYmmddHHMMSS`.
     # @param description [String, nil] optional description.
@@ -294,6 +324,7 @@ module VectorAmp
       when "s3" then SourceNames.s3(config[:bucket] || config["bucket"], config[:prefix] || config["prefix"])
       when "gcs" then SourceNames.gcs(config[:bucket] || config["bucket"], config[:prefix] || config["prefix"])
       when "jira" then SourceNames.jira(project_keys: config[:project_keys] || config["project_keys"], cloud_id: config[:cloud_id] || config["cloud_id"])
+      when "confluence" then SourceNames.confluence(spaces: config[:spaces] || config["spaces"], cloud_id: config[:cloud_id] || config["cloud_id"], base_url: config[:base_url] || config["base_url"])
       when "gdrive" then SourceNames.google_drive(folder_ids: config[:folder_ids] || config["folder_ids"], file_ids: config[:file_ids] || config["file_ids"])
       end
     end

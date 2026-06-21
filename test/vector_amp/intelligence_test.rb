@@ -66,6 +66,35 @@ class VectorAmpIntelligenceTest < Minitest::Test
     assert_equal [{ "chunk_type" => "done" }], client.ask_stream("hi").to_a
   end
 
+  def test_sessions_lifecycle
+    stub_request(:post, "#{API}/intelligence/sessions")
+      .with(body: { title: "Onboarding", dataset_id: "ds_1" })
+      .to_return_json(status: 201, body: { id: "sess_1", title: "Onboarding" })
+    stub_request(:get, "#{API}/intelligence/sessions?limit=20")
+      .to_return_json(body: { sessions: [{ id: "sess_1" }] })
+    stub_request(:get, "#{API}/intelligence/sessions/sess_1")
+      .to_return_json(body: { id: "sess_1", title: "Onboarding" })
+    stub_request(:post, "#{API}/intelligence/sessions/sess_1/messages")
+      .with(body: { role: "user", content: "What is SABLE?" })
+      .to_return_json(status: 201, body: { id: "msg_1", role: "user", content: "What is SABLE?" })
+    stub_request(:get, "#{API}/intelligence/sessions/sess_1/messages?limit=100")
+      .to_return_json(body: { messages: [{ id: "msg_1" }] })
+    stub_request(:delete, "#{API}/intelligence/sessions/sess_1")
+      .to_return_json(body: { deleted: true })
+
+    session = @client.intelligence.create_session(title: "Onboarding", dataset_id: "ds_1")
+    assert_equal "sess_1", session.fetch("id")
+
+    assert_equal "sess_1", @client.intelligence.list_sessions(limit: 20).fetch("sessions").first.fetch("id")
+    assert_equal "Onboarding", @client.intelligence.get_session("sess_1").fetch("title")
+
+    message = @client.intelligence.append_message("sess_1", role: "user", content: "What is SABLE?")
+    assert_equal "msg_1", message.fetch("id")
+
+    assert_equal "msg_1", @client.intelligence.list_messages("sess_1").fetch("messages").first.fetch("id")
+    assert_equal true, @client.intelligence.delete_session("sess_1").fetch("deleted")
+  end
+
   class EnumeratorTransport
     def request(_method, _path, stream: false, **_options)
       raise "expected stream" unless stream

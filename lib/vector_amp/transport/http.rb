@@ -47,7 +47,7 @@ module VectorAmp
       def build_request(method, uri, body, headers)
         klass = Net::HTTP.const_get(method.to_s.capitalize)
         request = klass.new(uri)
-        request["Accept"] = "text/event-stream, application/json" 
+        request["Accept"] = "text/event-stream, application/json"
         request["Content-Type"] = "application/json" if body
         request["User-Agent"] = "vector_amp-ruby/#{VectorAmp::VERSION}"
         request["X-API-Key"] = @api_key
