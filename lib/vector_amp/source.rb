@@ -10,7 +10,7 @@ module VectorAmp
   # create a source or to `dataset.ingest_source(source)` once they include an id
   # returned by the API.
   class Source
-    SUPPORTED_SOURCE_TYPES = %w[s3 web gcs gdrive file_upload jira].freeze
+    SUPPORTED_SOURCE_TYPES = %w[s3 web gcs gdrive file_upload jira confluence].freeze
 
     # @return [String, nil] API source id when returned by the API.
     # @return [String] source type (`s3`, `web`, `gdrive`, or `file_upload`).
@@ -138,6 +138,30 @@ module VectorAmp
     def jira(project_keys: nil, cloud_id: nil)
       key = Array(project_keys).first || cloud_id
       key ? "jira-#{key}" : "jira-source"
+    end
+
+    # @param spaces [String, Array<String>, nil] Confluence space keys.
+    # @param cloud_id [String, nil] Atlassian cloud/site id.
+    # @param base_url [String, nil] Confluence base URL, e.g. https://company.atlassian.net.
+    # @return [String] `confluence-<space>`, `confluence-<host>`, or `confluence-source`.
+    def confluence(spaces: nil, cloud_id: nil, base_url: nil)
+      space = Array(spaces).first
+      return "confluence-#{space}" if space
+
+      host = host_from_url(base_url)
+      return "confluence-#{host}" if host
+      return "confluence-#{cloud_id}" if cloud_id
+
+      "confluence-source"
+    end
+
+    def host_from_url(url)
+      return nil if url.nil? || url.to_s.empty?
+
+      host = URI.parse(url.to_s).host
+      host && !host.empty? ? host : nil
+    rescue URI::InvalidURIError
+      nil
     end
 
     # @param folder_ids [String, Array<String>, nil] folder ids.
@@ -275,6 +299,49 @@ module VectorAmp
         description: description,
         metadata: metadata,
         config: Utils.compact_hash(config.merge(cloud_id: cloud_id, access_token: access_token, project_keys: project_keys, jql: jql, include_comments: include_comments))
+      )
+    end
+  end
+
+  # Confluence ingestion source. Authenticates via basic auth (username + API
+  # token) by default, or Atlassian OAuth. include_attachments defaults to false.
+  class ConfluenceSource < Source
+    # @param cloud_id [String, nil] Atlassian OAuth cloud/site id; required unless base_url is given.
+    # @param base_url [String, nil] Confluence base URL, e.g. https://company.atlassian.net.
+    # @param name [String, nil] defaults to `confluence-<space>`/`confluence-<host>`/`confluence-source`.
+    # @param auth_mode [String] `basic` (default) or `oauth`.
+    # @param username [String, nil] username for basic auth.
+    # @param api_token [String, nil] API token for basic auth.
+    # @param oauth_credentials [Hash, nil] OAuth credentials for oauth auth_mode.
+    # @param spaces [String, Array<String>, nil] space keys to ingest; empty means all accessible.
+    # @param include_attachments [Boolean] include page attachments; defaults to false.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param id [String, nil] optional API source id.
+    # @param config [Hash] additional Confluence-source config forwarded to the API.
+    # @return [ConfluenceSource]
+    def initialize(cloud_id: nil, base_url: nil, name: nil, auth_mode: "basic", username: nil, api_token: nil,
+                   oauth_credentials: nil, spaces: nil, include_attachments: false, description: nil, metadata: nil, id: nil, **config)
+      if (cloud_id.nil? || cloud_id.to_s.empty?) && (base_url.nil? || base_url.to_s.empty?)
+        raise ArgumentError, "cloud_id or base_url is required"
+      end
+
+      super(
+        id: id,
+        source_type: "confluence",
+        name: name || SourceNames.confluence(spaces: spaces, cloud_id: cloud_id, base_url: base_url),
+        description: description,
+        metadata: metadata,
+        config: Utils.compact_hash(config.merge(
+          cloud_id: cloud_id,
+          base_url: base_url,
+          auth_mode: auth_mode,
+          username: username,
+          api_token: api_token,
+          oauth_credentials: oauth_credentials,
+          spaces: spaces.nil? ? nil : Array(spaces),
+          include_attachments: include_attachments
+        ))
       )
     end
   end

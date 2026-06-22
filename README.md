@@ -3,9 +3,9 @@
 Official Ruby client for the VectorAmp API.
 
 - Default API: `https://api.vectoramp.com`
-- Auth: `X-API-Key`
+- Auth: `X-Api-Key`
 - Transport abstraction: REST today, designed so gRPC can be added later
-- Public/RubyGems-ready gem structure. This repository is not published by CI.
+- Licensed under Apache-2.0.
 
 ## Installation
 
@@ -26,43 +26,45 @@ bundle install
 ```ruby
 require "vector_amp"
 
-client = VectorAmp::Client.new(api_key: ENV.fetch("VECTORAMP_API_KEY"))
+# api_key defaults to ENV["VECTORAMP_API_KEY"]; base_url defaults to production.
+client = VectorAmp::Client.new
 
-# Create a SABLE dataset. The SDK always sends index_type: "sable" and does
-# not expose index type selection.
-dataset = client.datasets.create(
-  name: "product-docs",
-  dim: 2560,
-  metric: "cosine",
-  embedding: {
-    provider: "vectoramp",
-    model: "VectorAmp-Embedding-4B"
-  }
-)
+# One-call create: only a name is required. The SDK defaults to the managed
+# vectoramp/VectorAmp-Embedding-4B model, infers dim (2560), metric "cosine",
+# and always uses the SABLE index (index type is never exposed).
+dataset = client.datasets.create(name: "product-docs")
 
-# Create/get/list return VectorAmp::Dataset resources, so you can use instance methods.
-# Add raw vectors.
-dataset.insert(vectors: [
-  {
-    id: "doc-001",
-    values: [0.1, 0.2, 0.3],
-    metadata: { title: "Intro", source: "manual" }
-  }
-])
-
-# Or embed and insert text in one call.
+# Create/get/list return VectorAmp::Dataset resources. Prefer the object->method
+# style: call helpers directly on the returned dataset.
 dataset.add_texts(
-  texts: ["VectorAmp is powered by SABLE."],
+  ["VectorAmp is powered by SABLE."],
   metadata: { source: "readme" }
 )
 
-results = dataset.search(
-  "What powers VectorAmp?",
-  top_k: 5,
-  include_documents: true
-)
+# Add raw vectors. Ids may be strings or integers; integer ids stay numbers.
+dataset.insert(vectors: [
+  { id: 1, values: [0.1, 0.2, 0.3], metadata: { title: "Intro" } },
+  { id: "doc-002", values: [0.4, 0.5, 0.6], metadata: { title: "Details" } }
+])
 
+results = dataset.search("What powers VectorAmp?", top_k: 5, include_documents: true)
 answer = dataset.ask("What powers VectorAmp?")
+```
+
+### Creating datasets
+
+```ruby
+# Minimal: name only.
+client.datasets.create(name: "docs")
+
+# Enable hybrid (dense + sparse) search.
+client.datasets.create(name: "docs", hybrid: true)
+
+# Use an OpenAI embedding model (dim inferred from the model).
+client.datasets.create(name: "docs", embedding: VectorAmp::Embedding.openai("large"))
+
+# Custom/unknown model: pass dim explicitly.
+client.datasets.create(name: "docs", embedding: { provider: "acme", model: "acme-embed" }, dim: 1024)
 ```
 
 ## Configuration
@@ -84,11 +86,11 @@ client = VectorAmp::Client.new(
 page = client.datasets.list(limit: 50, offset: 0)
 dataset = page["datasets"].first
 
-# Resource-style methods.
+# Object->method style (preferred).
 dataset = client.datasets.get("dataset-uuid")
 dataset.stats
 dataset.search(
-  query_text: "wireless headphones",
+  "wireless headphones",
   top_k: 10,
   filters: { category: "electronics" },
   advanced_filters: [
@@ -96,7 +98,7 @@ dataset.search(
   ],
   include_metadata: true,
   include_documents: false,
-  rerank: { enabled: true } # vectoramp / VectorAmp-Rerank-v1
+  rerank: true # expands to vectoramp / VectorAmp-Rerank-v1
 )
 dataset.insert(vectors: [{ id: "sku-1", values: [0.1, 0.2], metadata: { category: "electronics" } }])
 dataset.add_texts(["Wireless headphones"], metadata: { category: "electronics" })
@@ -104,9 +106,11 @@ dataset.ask("Which headphones should I buy?")
 dataset.ingest_source("source-uuid")
 dataset.delete
 
-# Service-style methods are still supported.
+# Hybrid search: pass a sparse query and/or alpha weighting on a hybrid dataset.
+dataset.search("wireless headphones", hybrid: true, sparse_query: "headphones", alpha: 0.5)
+
+# Client-namespaced methods are equivalent and also supported.
 client.datasets.stats("dataset-uuid")
-client.datasets.delete("dataset-uuid")
 client.datasets.search("dataset-uuid", "wireless headphones", top_k: 10)
 client.datasets.insert("dataset-uuid", vectors: [])
 ```
@@ -143,7 +147,7 @@ client.ingestion.list_sources(limit: 50, offset: 0)
 client.ingestion.get_source("source-uuid")
 
 # Typed builders cover the supported source_type values:
-# "web", "s3", "gcs", "gdrive", "file_upload", and "jira".
+# "web", "s3", "gcs", "gdrive", "file_upload", "jira", and "confluence".
 source = client.sources.create_web(
   start_urls: ["https://docs.example.com"],
   max_depth: 1,
@@ -162,6 +166,13 @@ jira_source = client.sources.create_jira(
   cloud_id: "atlassian-cloud-id",
   project_keys: ["ENG"],
   include_comments: true # default
+)
+
+confluence_source = client.sources.create_confluence(
+  cloud_id: "atlassian-cloud-id",
+  spaces: ["ENG"],
+  username: "service-account@example.com",
+  api_token: ENV["CONFLUENCE_API_TOKEN"]
 )
 
 gdrive_source = client.sources.create_google_drive(
@@ -266,6 +277,22 @@ client.ask_stream("Summarize").each do |event|
 end
 ```
 
+### Sessions
+
+Persist multi-turn conversations server-side instead of resending history.
+
+```ruby
+session = client.intelligence.create_session(title: "Onboarding", dataset_id: "dataset-uuid")
+
+client.intelligence.append_message(session.fetch("id"), role: "user", content: "What is SABLE?")
+client.intelligence.append_message(session.fetch("id"), role: "assistant", content: "A managed index type.")
+
+messages = client.intelligence.list_messages(session.fetch("id"))
+sessions = client.intelligence.list_sessions(limit: 20)
+client.intelligence.get_session(session.fetch("id"))
+client.intelligence.delete_session(session.fetch("id"))
+```
+
 ## Error handling
 
 Non-2xx responses raise `VectorAmp::APIError` with `status`, `body`, and `headers`.
@@ -287,6 +314,54 @@ bundle exec rake test
 
 Tests mock HTTP with WebMock and enforce SimpleCov coverage.
 
-## Release status
+## Method reference
 
-This gem is structured for RubyGems but is not published from this repository yet.
+Both access styles work everywhere: `client.datasets.<m>(id, ...)` and the
+equivalent `datasetObj.<m>(...)` on a returned `VectorAmp::Dataset`.
+
+### Datasets — `client.datasets`
+
+| Method | Required | Optional (defaults) |
+|---|---|---|
+| `create(name:)` | `name` | `dim` (inferred), `embedding` (vectoramp/VectorAmp-Embedding-4B), `metric` ("cosine"), `hybrid`, `filters`, `metadata_schema`, `tuning`, `metadata` |
+| `list` | — | `limit` (50), `offset` (0) |
+| `get(id)` | `id` | — |
+| `delete(id)` | `id` | — |
+| `stats(id)` | `id` | — |
+| `search(id, query = nil)` | `id` | `query`/`query_text`/`search_text`, `top_k` (10), `filters`, `advanced_filters`, `hybrid`, `sparse_query`, `alpha`, `rerank`, `include_documents`, `include_metadata`, `include_embeddings`, `embedding_model`, `embedding_provider`, `nprobe_override`, `rerank_depth_override` |
+| `insert(id, vectors:)` | `id`, `vectors` | — (integer ids preserved as numbers) |
+| `embed(id)` | `id` | `text`, `texts` (one required) |
+| `add_texts(id, texts = nil)` | `id`, `texts` | `ids` (auto-generated), `metadata` |
+| `list_documents(id)` | `id` | `limit` (50), `cursor`, `status` |
+| `download_document(id, document_id)` | `id`, `document_id` | — |
+
+Dataset-object helpers: `search`, `insert`, `add_texts`, `embed`, `delete`, `stats`,
+`list_documents`, `download_document`, `ask`, `ingest_source`, `ingest_files`.
+
+### Intelligence — `client.intelligence` (and `client.ask` / `client.ask_stream`)
+
+| Method | Required | Optional (defaults) |
+|---|---|---|
+| `query(query)` / `ask` / `ask_stream` | `query` | `dataset_id` ("all" when unscoped), `top_k` (5 server-side), `conversation_history`, `include_sources`, `stream` |
+| `create_session` | — | `title`, `dataset_id`, `workspace_id`, `metadata` |
+| `list_sessions` | — | `limit` (50) |
+| `get_session(session_id)` | `session_id` | — |
+| `delete_session(session_id)` | `session_id` | — |
+| `append_message(session_id, role:, content:)` | `session_id`, `role`, `content` | `metadata` |
+| `list_messages(session_id)` | `session_id` | `limit` (100) |
+
+### Sources — `client.sources` (alias of `client.ingestion`)
+
+`create(source)`, `create_web(start_urls:)`, `create_s3(bucket:)`, `create_gcs(bucket:)`,
+`create_google_drive(folder_ids:|file_ids:)`, `create_jira(cloud_id:)`,
+`create_confluence(cloud_id:|base_url:)`, `create_file_upload`, `list_sources`, `get_source(id)`.
+Jobs: `start_job(source_id:, dataset_id:)`, `list_jobs`, `get_job(id)`, `retry_job(id)`,
+`ingest_files(dataset_id:, paths:)`.
+
+### Schedules — `client.schedules`
+
+`list`, `get(id)`, `create(source_id:, dataset_id:, cron:)`, `update(id)`, `delete(id)`, `trigger(id)`.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
