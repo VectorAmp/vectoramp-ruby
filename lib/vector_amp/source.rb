@@ -225,7 +225,7 @@ module VectorAmp
 
   # Google Cloud Storage ingestion source.
   class GCSSource < Source
-    def initialize(bucket:, name: nil, prefix: nil, description: nil, metadata: nil, id: nil, **config)
+    def initialize(bucket:, name: nil, prefix: nil, connection_id: nil, description: nil, metadata: nil, id: nil, **config)
       raise ArgumentError, "bucket is required" if bucket.nil? || bucket.to_s.empty?
 
       super(
@@ -234,7 +234,7 @@ module VectorAmp
         name: name || SourceNames.gcs(bucket, prefix),
         description: description,
         metadata: metadata,
-        config: Utils.compact_hash(config.merge(bucket: bucket, prefix: prefix))
+        config: Utils.compact_hash(config.merge(bucket: bucket, prefix: prefix, connection_id: connection_id))
       )
     end
   end
@@ -244,12 +244,17 @@ module VectorAmp
     # @param name [String, nil] defaults to `google-drive-<first id>` or `google-drive-source`.
     # @param folder_ids [String, Array<String>, nil] folder ids to ingest; required if file_ids is empty.
     # @param file_ids [String, Array<String>, nil] file ids to ingest; required if folder_ids is empty.
+    # @param auth_mode [String, nil] auth strategy (`service_account`, `oauth`); omitted from config when nil.
+    # @param service_account_json [Hash, String, nil] service-account credentials for `service_account` auth.
+    # @param oauth_credentials [Hash, nil] OAuth credentials for `oauth` auth.
+    # @param connection_id [String, nil] optional managed connection id used in place of inline credentials.
     # @param description [String, nil] optional description.
     # @param metadata [Hash, nil] optional metadata.
     # @param id [String, nil] optional API source id.
     # @param config [Hash] additional Google Drive-source config forwarded to the API.
     # @return [GoogleDriveSource]
-    def initialize(name: nil, folder_ids: nil, file_ids: nil, description: nil, metadata: nil, id: nil, **config)
+    def initialize(name: nil, folder_ids: nil, file_ids: nil, auth_mode: nil, service_account_json: nil,
+                   oauth_credentials: nil, connection_id: nil, description: nil, metadata: nil, id: nil, **config)
       if Array(folder_ids).empty? && Array(file_ids).empty?
         raise ArgumentError, "folder_ids or file_ids is required"
       end
@@ -260,7 +265,14 @@ module VectorAmp
         name: name || SourceNames.google_drive(folder_ids: folder_ids, file_ids: file_ids),
         description: description,
         metadata: metadata,
-        config: Utils.compact_hash(config.merge(folder_ids: folder_ids, file_ids: file_ids))
+        config: Utils.compact_hash(config.merge(
+          folder_ids: folder_ids,
+          file_ids: file_ids,
+          auth_mode: auth_mode,
+          service_account_json: service_account_json,
+          oauth_credentials: oauth_credentials,
+          connection_id: connection_id
+        ))
       )
     end
   end
@@ -289,7 +301,7 @@ module VectorAmp
 
   # Jira ingestion source. include_comments defaults to true.
   class JiraSource < Source
-    def initialize(cloud_id:, name: nil, access_token: nil, project_keys: nil, jql: nil, include_comments: true, description: nil, metadata: nil, id: nil, **config)
+    def initialize(cloud_id:, name: nil, access_token: nil, project_keys: nil, jql: nil, include_comments: true, connection_id: nil, description: nil, metadata: nil, id: nil, **config)
       raise ArgumentError, "cloud_id is required" if cloud_id.nil? || cloud_id.to_s.empty?
 
       super(
@@ -298,7 +310,7 @@ module VectorAmp
         name: name || SourceNames.jira(project_keys: project_keys, cloud_id: cloud_id),
         description: description,
         metadata: metadata,
-        config: Utils.compact_hash(config.merge(cloud_id: cloud_id, access_token: access_token, project_keys: project_keys, jql: jql, include_comments: include_comments))
+        config: Utils.compact_hash(config.merge(cloud_id: cloud_id, access_token: access_token, project_keys: project_keys, jql: jql, include_comments: include_comments, connection_id: connection_id))
       )
     end
   end
@@ -315,13 +327,14 @@ module VectorAmp
     # @param oauth_credentials [Hash, nil] OAuth credentials for oauth auth_mode.
     # @param spaces [String, Array<String>, nil] space keys to ingest; empty means all accessible.
     # @param include_attachments [Boolean] include page attachments; defaults to false.
+    # @param connection_id [String, nil] optional managed connection id used in place of inline credentials.
     # @param description [String, nil] optional description.
     # @param metadata [Hash, nil] optional metadata.
     # @param id [String, nil] optional API source id.
     # @param config [Hash] additional Confluence-source config forwarded to the API.
     # @return [ConfluenceSource]
     def initialize(cloud_id: nil, base_url: nil, name: nil, auth_mode: "basic", username: nil, api_token: nil,
-                   oauth_credentials: nil, spaces: nil, include_attachments: false, description: nil, metadata: nil, id: nil, **config)
+                   oauth_credentials: nil, spaces: nil, include_attachments: false, connection_id: nil, description: nil, metadata: nil, id: nil, **config)
       if (cloud_id.nil? || cloud_id.to_s.empty?) && (base_url.nil? || base_url.to_s.empty?)
         raise ArgumentError, "cloud_id or base_url is required"
       end
@@ -340,7 +353,8 @@ module VectorAmp
           api_token: api_token,
           oauth_credentials: oauth_credentials,
           spaces: spaces.nil? ? nil : Array(spaces),
-          include_attachments: include_attachments
+          include_attachments: include_attachments,
+          connection_id: connection_id
         ))
       )
     end
