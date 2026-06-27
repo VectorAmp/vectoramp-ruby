@@ -29,6 +29,44 @@ module VectorAmp
       @transport.request(:get, "/ingestion/sources/#{source_id}")
     end
 
+    # Delete an ingestion source.
+    # @param source_id [String] source id.
+    # @param force [Boolean] force deletion even if the source is still referenced; sends `?force=true`.
+    # @return [Hash] delete response.
+    def delete_source(source_id, force: false)
+      query = force ? { force: true } : nil
+      @transport.request(:delete, "/ingestion/sources/#{source_id}", query: query)
+    end
+
+    # List sources that are not referenced by any job, schedule, or dataset.
+    # @param limit [Integer] page size; defaults to 50.
+    # @param offset [Integer] page offset; defaults to 0.
+    # @return [Hash] response envelope from the API.
+    def list_unused_sources(limit: 50, offset: 0)
+      @transport.request(:get, "/ingestion/sources/unused", query: { limit: limit, offset: offset })
+    end
+
+    # Delete all unused (unreferenced) sources.
+    # @return [Hash] cleanup response.
+    def cleanup_unused_sources
+      @transport.request(:post, "/ingestion/sources/cleanup")
+    end
+
+    # List references (jobs, schedules, datasets) that use a source.
+    # @param source_id [String] source id.
+    # @return [Hash] references response.
+    def source_references(source_id)
+      @transport.request(:get, "/ingestion/sources/#{source_id}/references")
+    end
+
+    # Validate a source type and config without creating a source.
+    # @param source_type [String, Symbol] source type to validate.
+    # @param config [Hash] source-specific config to validate.
+    # @return [Hash] validation response.
+    def validate_source(source_type:, config:)
+      @transport.request(:post, "/ingestion/sources/validate", body: { source_type: source_type, config: config })
+    end
+
     # Create an ingestion source from a Source object/hash or explicit options.
     # @param source [Source, Hash, nil] optional source object/hash; when supplied, option fields are ignored.
     # @param source_type [String, Symbol, nil] source type (`s3`, `web`, `gdrive`, or `file_upload`).
@@ -90,26 +128,28 @@ module VectorAmp
       ))
     end
 
-    # Create a Google Drive source.
-    # @param name [String, nil] defaults to `google-drive-<first id>` or `google-drive-source`.
-    # @param folder_ids [String, Array<String>, nil] folder ids to ingest; required if file_ids is empty.
-    # @param file_ids [String, Array<String>, nil] file ids to ingest; required if folder_ids is empty.
+    # Create a Google Cloud Storage source.
+    # @param bucket [String] required GCS bucket name.
+    # @param name [String, nil] defaults to `gcs-<bucket>` or `gcs-<bucket>-<prefix>`.
+    # @param prefix [String, nil] optional object prefix.
+    # @param connection_id [String, nil] optional managed connection id used in place of inline credentials.
     # @param description [String, nil] optional description.
     # @param metadata [Hash, nil] optional metadata.
-    # @param config [Hash] additional Google Drive-source config forwarded to the API.
+    # @param config [Hash] additional GCS-source config forwarded to the API.
     # @return [Hash] created source response.
-    def create_gcs(bucket:, name: nil, prefix: nil, description: nil, metadata: nil, **config)
+    def create_gcs(bucket:, name: nil, prefix: nil, connection_id: nil, description: nil, metadata: nil, **config)
       create_source(GCSSource.new(
         bucket: bucket,
         name: name,
         prefix: prefix,
+        connection_id: connection_id,
         description: description,
         metadata: metadata,
         **config
       ))
     end
 
-    def create_jira(cloud_id:, name: nil, access_token: nil, project_keys: nil, jql: nil, include_comments: true, description: nil, metadata: nil, **config)
+    def create_jira(cloud_id:, name: nil, access_token: nil, project_keys: nil, jql: nil, include_comments: true, connection_id: nil, description: nil, metadata: nil, **config)
       create_source(JiraSource.new(
         cloud_id: cloud_id,
         name: name,
@@ -117,17 +157,35 @@ module VectorAmp
         project_keys: project_keys,
         jql: jql,
         include_comments: include_comments,
+        connection_id: connection_id,
         description: description,
         metadata: metadata,
         **config
       ))
     end
 
-    def create_google_drive(name: nil, folder_ids: nil, file_ids: nil, description: nil, metadata: nil, **config)
+    # Create a Google Drive source.
+    # @param name [String, nil] defaults to `google-drive-<first id>` or `google-drive-source`.
+    # @param folder_ids [String, Array<String>, nil] folder ids to ingest; required if file_ids is empty.
+    # @param file_ids [String, Array<String>, nil] file ids to ingest; required if folder_ids is empty.
+    # @param auth_mode [String, nil] auth strategy (`service_account`, `oauth`); omitted when nil.
+    # @param service_account_json [Hash, String, nil] service-account credentials for `service_account` auth.
+    # @param oauth_credentials [Hash, nil] OAuth credentials for `oauth` auth.
+    # @param connection_id [String, nil] optional managed connection id used in place of inline credentials.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param config [Hash] additional Google Drive-source config forwarded to the API.
+    # @return [Hash] created source response.
+    def create_google_drive(name: nil, folder_ids: nil, file_ids: nil, auth_mode: nil, service_account_json: nil,
+                            oauth_credentials: nil, connection_id: nil, description: nil, metadata: nil, **config)
       create_source(GoogleDriveSource.new(
         name: name,
         folder_ids: folder_ids,
         file_ids: file_ids,
+        auth_mode: auth_mode,
+        service_account_json: service_account_json,
+        oauth_credentials: oauth_credentials,
+        connection_id: connection_id,
         description: description,
         metadata: metadata,
         **config
@@ -143,12 +201,13 @@ module VectorAmp
     # @param api_token [String, nil] API token for basic auth.
     # @param spaces [String, Array<String>, nil] space keys to ingest; empty means all accessible.
     # @param include_attachments [Boolean] include page attachments; defaults to false.
+    # @param connection_id [String, nil] optional managed connection id used in place of inline credentials.
     # @param description [String, nil] optional description.
     # @param metadata [Hash, nil] optional metadata.
     # @param config [Hash] additional Confluence-source config forwarded to the API.
     # @return [Hash] created source response.
     def create_confluence(cloud_id: nil, base_url: nil, name: nil, auth_mode: "basic", username: nil, api_token: nil,
-                          spaces: nil, include_attachments: false, description: nil, metadata: nil, **config)
+                          spaces: nil, include_attachments: false, connection_id: nil, description: nil, metadata: nil, **config)
       create_source(ConfluenceSource.new(
         cloud_id: cloud_id,
         base_url: base_url,
@@ -158,6 +217,7 @@ module VectorAmp
         api_token: api_token,
         spaces: spaces,
         include_attachments: include_attachments,
+        connection_id: connection_id,
         description: description,
         metadata: metadata,
         **config

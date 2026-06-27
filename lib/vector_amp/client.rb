@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "connections"
 require_relative "datasets"
 require_relative "error"
 require_relative "ingestion"
@@ -17,7 +18,8 @@ module VectorAmp
     # @return [DatasetsResource] dataset API resource.
     # @return [IngestionResource] ingestion/source API resource.
     # @return [IntelligenceResource] intelligence API resource.
-    attr_reader :base_url, :datasets, :ingestion, :intelligence, :schedules, :sources
+    # @return [ConnectionsResource] managed provider connections API resource.
+    attr_reader :base_url, :datasets, :ingestion, :intelligence, :schedules, :sources, :connections
 
     # Create a VectorAmp API client.
     # @param api_key [String] API key; defaults to ENV["VECTORAMP_API_KEY"].
@@ -35,6 +37,7 @@ module VectorAmp
       @sources = @ingestion
       @schedules = SchedulesResource.new(@transport)
       @intelligence = IntelligenceResource.new(@transport)
+      @connections = ConnectionsResource.new(@transport)
       @datasets = DatasetsResource.new(@transport, client: self)
     end
 

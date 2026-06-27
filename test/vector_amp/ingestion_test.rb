@@ -217,4 +217,89 @@ class VectorAmpIngestionTest < Minitest::Test
   ensure
     file.unlink if file
   end
+
+  def test_source_management_methods
+    stub_request(:delete, "#{API}/ingestion/sources/src_1").to_return_json(body: { deleted: true })
+    forced = stub_request(:delete, "#{API}/ingestion/sources/src_2?force=true").to_return_json(body: { deleted: true })
+    stub_request(:get, "#{API}/ingestion/sources/unused?limit=25&offset=5")
+      .to_return_json(body: { sources: [], total: 0, limit: 25, offset: 5 })
+    stub_request(:post, "#{API}/ingestion/sources/cleanup").to_return_json(body: { deleted: 3 })
+    stub_request(:get, "#{API}/ingestion/sources/src_1/references")
+      .to_return_json(body: { references: [{ type: "job", id: "job_1" }] })
+    validate = stub_request(:post, "#{API}/ingestion/sources/validate")
+               .with(body: { source_type: "s3", config: { bucket: "docs-bucket" } })
+               .to_return_json(body: { valid: true })
+
+    assert_equal true, @client.ingestion.delete_source("src_1").fetch("deleted")
+    assert_equal true, @client.sources.delete_source("src_2", force: true).fetch("deleted")
+    assert_requested forced
+    assert_equal 5, @client.ingestion.list_unused_sources(limit: 25, offset: 5).fetch("offset")
+    assert_equal 3, @client.ingestion.cleanup_unused_sources.fetch("deleted")
+    assert_equal "job_1", @client.ingestion.source_references("src_1").fetch("references").first.fetch("id")
+    assert_equal true, @client.ingestion.validate_source(source_type: "s3", config: { bucket: "docs-bucket" }).fetch("valid")
+    assert_requested validate
+  end
+
+  def test_connection_id_and_gdrive_auth_serialization
+    gdrive = VectorAmp::GoogleDriveSource.new(
+      folder_ids: ["folder_1"],
+      auth_mode: "oauth",
+      service_account_json: { "type" => "service_account" },
+      oauth_credentials: { "token" => "tok" },
+      connection_id: "conn_1"
+    )
+    assert_equal "oauth", gdrive.config.fetch(:auth_mode)
+    assert_equal({ "type" => "service_account" }, gdrive.config.fetch(:service_account_json))
+    assert_equal({ "token" => "tok" }, gdrive.config.fetch(:oauth_credentials))
+    assert_equal "conn_1", gdrive.config.fetch(:connection_id)
+
+    # Optional auth/connection fields are omitted when not supplied.
+    plain = VectorAmp::GoogleDriveSource.new(folder_ids: ["folder_1"])
+    refute plain.config.key?(:auth_mode)
+    refute plain.config.key?(:connection_id)
+    assert_equal({ folder_ids: ["folder_1"] }, plain.config)
+
+    assert_equal "conn_2", VectorAmp::GCSSource.new(bucket: "docs", connection_id: "conn_2").config.fetch(:connection_id)
+    assert_equal "conn_3", VectorAmp::JiraSource.new(cloud_id: "cloud", connection_id: "conn_3").config.fetch(:connection_id)
+    assert_equal "conn_4", VectorAmp::ConfluenceSource.new(cloud_id: "cloud", connection_id: "conn_4").config.fetch(:connection_id)
+  end
+
+  def test_create_helpers_forward_connection_id
+    gdrive = stub_request(:post, "#{API}/ingestion/sources")
+             .with { |request|
+               body = JSON.parse(request.body)
+               body["source_type"] == "gdrive" &&
+                 body["config"]["connection_id"] == "conn_g" &&
+                 body["config"]["auth_mode"] == "oauth"
+             }
+             .to_return_json(status: 201, body: { id: "src_g" })
+    gcs = stub_request(:post, "#{API}/ingestion/sources")
+          .with { |request|
+            body = JSON.parse(request.body)
+            body["source_type"] == "gcs" && body["config"]["connection_id"] == "conn_c"
+          }
+          .to_return_json(status: 201, body: { id: "src_c" })
+    confluence = stub_request(:post, "#{API}/ingestion/sources")
+                 .with { |request|
+                   body = JSON.parse(request.body)
+                   body["source_type"] == "confluence" && body["config"]["connection_id"] == "conn_f"
+                 }
+                 .to_return_json(status: 201, body: { id: "src_f" })
+    jira = stub_request(:post, "#{API}/ingestion/sources")
+           .with { |request|
+             body = JSON.parse(request.body)
+             body["source_type"] == "jira" && body["config"]["connection_id"] == "conn_j"
+           }
+           .to_return_json(status: 201, body: { id: "src_j" })
+
+    assert_equal "src_g",
+                 @client.sources.create_google_drive(folder_ids: ["f1"], auth_mode: "oauth", connection_id: "conn_g").fetch("id")
+    assert_equal "src_c", @client.sources.create_gcs(bucket: "b", connection_id: "conn_c").fetch("id")
+    assert_equal "src_f", @client.sources.create_confluence(cloud_id: "cloud", connection_id: "conn_f").fetch("id")
+    assert_equal "src_j", @client.sources.create_jira(cloud_id: "cloud", connection_id: "conn_j").fetch("id")
+    assert_requested gdrive
+    assert_requested gcs
+    assert_requested confluence
+    assert_requested jira
+  end
 end
