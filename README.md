@@ -64,14 +64,16 @@ answer = dataset.ask("What powers VectorAmp?")
 ### Creating datasets
 
 ```ruby
-# Minimal: name only.
+# Minimal: name only. Embedding config is omitted so VectorAmp uses
+# the managed VectorAmp-Embedding-4B model and infers dim 2560.
 client.datasets.create(name: "docs")
 
 # Enable hybrid (dense + sparse) search.
 client.datasets.create(name: "docs", hybrid: true)
 
-# Use an OpenAI embedding model (dim inferred from the model).
-client.datasets.create(name: "docs", embedding: VectorAmp::Embedding.openai("large"))
+# Optional BYOM: use OpenAI only when you intentionally want that provider
+# (dim inferred from the model).
+client.datasets.create(name: "openai-docs", embedding: VectorAmp::Embedding.openai("large"))
 
 # Custom/unknown model: pass dim explicitly.
 client.datasets.create(name: "docs", embedding: { provider: "acme", model: "acme-embed" }, dim: 1024)
