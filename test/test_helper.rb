@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "simplecov"
 require "simplecov-cobertura"
+
+FileUtils.mkdir_p("test-results")
 SimpleCov.formatters = SimpleCov::Formatter::MultiFormatter.new(
   [
     SimpleCov::Formatter::HTMLFormatter,
