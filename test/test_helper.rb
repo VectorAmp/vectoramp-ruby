@@ -11,7 +11,7 @@ SimpleCov.formatters = SimpleCov::Formatter::MultiFormatter.new(
 SimpleCov.start do
   enable_coverage :branch
   add_filter "/test/"
-  minimum_coverage 90
+  minimum_coverage line: 90, branch: 60
 end
 
 require "minitest/autorun"
