@@ -85,7 +85,7 @@ class VectorAmpDatasetsTest < Minitest::Test
            .with(body: hash_including(
              name: "docs",
              dim: 3072,
-             embedding: { provider: "openai", model: "text-embedding-3-large" }
+             embedding: { provider: "openai", model: "text-embedding-3-large", secret_ref: "emb:openai:api_key" }
            ))
            .to_return_json(status: 201, body: { id: "ds_1" })
 
@@ -218,6 +218,41 @@ class VectorAmpDatasetsTest < Minitest::Test
     assert_equal 1, @client.datasets.insert("ds_1", vectors: vectors).fetch("inserted")
   end
 
+  def test_delete_vectors_sends_delete_body
+    stub = stub_request(:delete, "#{API}/datasets/ds_1/vectors")
+           .with(body: { ids: [1, "two"], write_concern: "all" })
+           .to_return_json(body: { deleted: 2, dataset_id: "ds_1" })
+
+    response = @client.datasets.delete_vectors("ds_1", ids: [1, "two"], write_concern: "all")
+
+    assert_requested stub
+    assert_equal 2, response.fetch("deleted")
+  end
+
+  def test_put_openai_key_and_create_openai_dataset_helper
+    key_stub = stub_request(:put, "#{API}/org-secrets/emb%3Aopenai%3Aapi_key")
+               .with(body: { api_key: "sk-test", secret_ref: "custom", validate: true, model: "text-embedding-3-small" })
+               .to_return(status: 204, body: "")
+    create_stub = stub_request(:post, "#{API}/datasets")
+                  .with { |request|
+                    body = JSON.parse(request.body)
+                    body["name"] == "openai-docs" &&
+                      body["dim"] == 1536 &&
+                      body["embedding"] == {
+                        "provider" => "openai",
+                        "model" => "text-embedding-3-small",
+                        "secret_ref" => "custom"
+                      }
+                  }
+                  .to_return_json(status: 201, body: { id: "ds_openai" })
+
+    dataset = @client.datasets.create_with_openai_api_key(name: "openai-docs", api_key: "sk-test", secret_ref: "custom", validate: true)
+
+    assert_requested key_stub
+    assert_requested create_stub
+    assert_equal "ds_openai", dataset.id
+  end
+
   def test_add_texts_embeds_and_inserts
     stub_request(:post, "#{API}/datasets/ds_1/embed")
       .with(body: { texts: %w[alpha beta] })
@@ -247,6 +282,9 @@ class VectorAmpDatasetsTest < Minitest::Test
     stub_request(:post, "#{API}/datasets/ds_1/insert")
       .with(body: { vectors: vectors })
       .to_return_json(body: { inserted: 1 })
+    stub_request(:delete, "#{API}/datasets/ds_1/vectors")
+      .with(body: { ids: ["a"] })
+      .to_return_json(body: { deleted: 1, dataset_id: "ds_1" })
     stub_request(:post, "#{API}/intelligence/query")
       .with(body: hash_including(query: "question", dataset_id: "ds_1"))
       .to_return_json(body: { answer: "42" })
@@ -254,6 +292,7 @@ class VectorAmpDatasetsTest < Minitest::Test
 
     assert_equal ["hit"], dataset.search("hello", rerank: { enabled: true }).fetch("results")
     assert_equal 1, dataset.insert(vectors: vectors).fetch("inserted")
+    assert_equal 1, dataset.delete_vectors(ids: ["a"]).fetch("deleted")
     assert_equal "42", dataset.ask("question").fetch("answer")
     assert_equal 1, dataset.stats.fetch("vector_count")
     assert_equal({ "id" => "ds_1", "name" => "docs" }, dataset.to_h)

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "utils"
+
 module VectorAmp
   # Embedding configuration defaults and helpers.
   #
@@ -28,16 +30,17 @@ module VectorAmp
 
     # Build an OpenAI embedding configuration.
     # @param size [String, Symbol] `"small"` (text-embedding-3-small) or `"large"` (text-embedding-3-large).
-    # @return [Hash] `{ provider: "openai", model: ... }`
+    # @param secret_ref [String, nil] organization secret reference containing the OpenAI API key.
+    # @return [Hash] `{ provider: "openai", model: ..., secret_ref: ... }`
     # @raise [ArgumentError] when size is not "small" or "large".
-    def openai(size = "small")
+    def openai(size = "small", secret_ref: "emb:openai:api_key")
       model = case size.to_s
               when "small" then "text-embedding-3-small"
               when "large" then "text-embedding-3-large"
               else
                 raise ArgumentError, %(openai size must be "small" or "large", got #{size.inspect})
               end
-      { provider: "openai", model: model }
+      Utils.compact_hash(provider: "openai", model: model, secret_ref: secret_ref)
     end
 
     # Normalize a user-supplied embedding value into a config hash.

@@ -71,6 +71,14 @@ module VectorAmp
       service.insert(id, vectors: vectors)
     end
 
+    # Delete one or more vectors from this dataset by id.
+    # @param ids [Array<String,Integer>] vector ids to delete.
+    # @param write_concern [String, nil] optional API write concern.
+    # @return [Hash] delete response.
+    def delete_vectors(ids:, write_concern: nil)
+      service.delete_vectors(id, ids: ids, write_concern: write_concern)
+    end
+
     # Embed and insert texts into this dataset.
     # @param texts_arg [Array<String>, nil] positional texts for convenience.
     # @param texts [Array<String>, nil] keyword texts.
