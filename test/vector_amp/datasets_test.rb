@@ -230,8 +230,8 @@ class VectorAmpDatasetsTest < Minitest::Test
   end
 
   def test_put_openai_key_and_create_openai_dataset_helper
-    key_stub = stub_request(:put, "#{API}/org-secrets/emb%3Aopenai%3Aapi_key")
-               .with(body: { api_key: "sk-test", secret_ref: "custom", validate: true, model: "text-embedding-3-small" })
+    key_stub = stub_request(:put, "#{API}/org-secrets/custom")
+               .with(body: { value: "sk-test" })
                .to_return(status: 204, body: "")
     create_stub = stub_request(:post, "#{API}/datasets")
                   .with { |request|

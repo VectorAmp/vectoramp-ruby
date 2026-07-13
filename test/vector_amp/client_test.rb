@@ -32,9 +32,9 @@ class VectorAmpClientTest < Minitest::Test
     client.org_secrets.put_openai_api_key(api_key: "sk-test")
 
     call = transport.calls.first
-    assert_equal :post, call[:method]
+    assert_equal :put, call[:method]
     assert_equal "/org-secrets/emb%3Aopenai%3Aapi_key", call[:path]
-    assert_equal({ api_key: "sk-test", secret_ref: "emb:openai:api_key" }, call[:body])
+    assert_equal({ value: "sk-test" }, call[:body])
   end
 
   class FakeTransport
