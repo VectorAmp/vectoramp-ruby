@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [0.2.0] - 2026-07-14
+
+### Added
+
+- Add dataset vector deletion helpers on client and dataset resources.
+- Add organization secret helpers for OpenAI embedding API keys.
+- Add OpenAI API key + dataset creation convenience helper.
+
 ## [0.1.0] - 2026-07-02
 
 ### Added
