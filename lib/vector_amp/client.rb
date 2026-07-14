@@ -5,6 +5,7 @@ require_relative "datasets"
 require_relative "error"
 require_relative "ingestion"
 require_relative "intelligence"
+require_relative "org_secrets"
 require_relative "schedules"
 require_relative "source"
 require_relative "transport/http"
@@ -19,7 +20,8 @@ module VectorAmp
     # @return [IngestionResource] ingestion/source API resource.
     # @return [IntelligenceResource] intelligence API resource.
     # @return [ConnectionsResource] managed provider connections API resource.
-    attr_reader :base_url, :datasets, :ingestion, :intelligence, :schedules, :sources, :connections
+    # @return [OrgSecretsResource] organization-scoped secret helpers.
+    attr_reader :base_url, :datasets, :ingestion, :intelligence, :schedules, :sources, :connections, :org_secrets
 
     # Create a VectorAmp API client.
     # @param api_key [String] API key; defaults to ENV["VECTORAMP_API_KEY"].
@@ -38,6 +40,7 @@ module VectorAmp
       @schedules = SchedulesResource.new(@transport)
       @intelligence = IntelligenceResource.new(@transport)
       @connections = ConnectionsResource.new(@transport)
+      @org_secrets = OrgSecretsResource.new(@transport)
       @datasets = DatasetsResource.new(@transport, client: self)
     end
 

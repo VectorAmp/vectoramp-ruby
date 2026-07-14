@@ -92,6 +92,29 @@ module VectorAmp
       wrap_dataset(@transport.request(:post, "/datasets", body: body))
     end
 
+    # Store/update an OpenAI API key in org secrets, then create an OpenAI-backed dataset
+    # whose embedding config references that secret.
+    # @param name [String] dataset name.
+    # @param api_key [String] OpenAI API key to store server-side.
+    # @param size [String, Symbol] "small" or "large".
+    # @param secret_ref [String] org secret reference to write and attach to the dataset.
+    # @param validate [Boolean] validate the key before storing.
+    # @param options [Hash] forwarded to {#create}, e.g. `hybrid: true` or `metadata:`.
+    # @return [Dataset] created dataset.
+    def create_with_openai_api_key(name:, api_key:, size: "small", secret_ref: "emb:openai:api_key", validate: false, **options)
+      secrets = @client&.org_secrets || begin
+        require_relative "org_secrets"
+        OrgSecretsResource.new(@transport)
+      end
+      secrets.put_openai_api_key(
+        api_key: api_key,
+        secret_ref: secret_ref,
+        validate: validate,
+        model: openai_model(size)
+      )
+      create(name: name, embedding: Embedding.openai(size, secret_ref: secret_ref), **options)
+    end
+
 
     # List retained source documents for a dataset using cursor pagination.
     # @param dataset_id [String] dataset id.
@@ -176,6 +199,21 @@ module VectorAmp
       @transport.request(:post, "/datasets/#{dataset_id}/insert", body: { vectors: Utils.normalize_vectors(vectors) })
     end
 
+    # Delete one or more vectors from a dataset by id.
+    # @param dataset_id [String] dataset id.
+    # @param ids [Array<String,Integer>] vector ids to delete.
+    # @param write_concern [String, nil] optional API write concern.
+    # @return [Hash] delete response with `deleted` and `dataset_id`.
+    def delete_vectors(dataset_id, ids:, write_concern: nil)
+      raise ArgumentError, "ids must not be empty" if ids.nil? || ids.empty?
+
+      @transport.request(
+        :delete,
+        "/datasets/#{dataset_id}/vectors",
+        body: Utils.compact_hash(ids: ids, write_concern: write_concern)
+      )
+    end
+
     # Generate embeddings using the dataset embedding configuration.
     # @param dataset_id [String] dataset id.
     # @param text [String, nil] single text to embed.
@@ -220,6 +258,15 @@ module VectorAmp
     end
 
     private
+
+    def openai_model(size)
+      case size.to_s
+      when "small" then "text-embedding-3-small"
+      when "large" then "text-embedding-3-large"
+      else
+        raise ArgumentError, %(openai size must be "small" or "large", got #{size.inspect})
+      end
+    end
 
     def wrap_dataset(data)
       Dataset.new(data, service: self, client: @client)

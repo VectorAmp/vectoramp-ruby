@@ -71,9 +71,16 @@ client.datasets.create(name: "docs")
 # Enable hybrid (dense + sparse) search.
 client.datasets.create(name: "docs", hybrid: true)
 
-# Optional BYOM: use OpenAI only when you intentionally want that provider
-# (dim inferred from the model).
+# Optional BYOM: use OpenAI only when you intentionally want that provider.
+# VectorAmp::Embedding.openai uses embedding.secret_ref "emb:openai:api_key" by default.
 client.datasets.create(name: "openai-docs", embedding: VectorAmp::Embedding.openai("large"))
+
+# Store/update the org OpenAI key, then create a dataset that references it.
+client.datasets.create_with_openai_api_key(
+  name: "openai-docs",
+  api_key: ENV.fetch("OPENAI_API_KEY"),
+  size: "small"
+)
 
 # Custom/unknown model: pass dim explicitly.
 client.datasets.create(name: "docs", embedding: { provider: "acme", model: "acme-embed" }, dim: 1024)
@@ -113,6 +120,7 @@ dataset.search(
   rerank: true # expands to vectoramp / VectorAmp-Rerank-v1
 )
 dataset.insert(vectors: [{ id: "sku-1", values: [0.1, 0.2], metadata: { category: "electronics" } }])
+dataset.delete_vectors(ids: ["sku-1"])
 dataset.add_texts(["Wireless headphones"], metadata: { category: "electronics" })
 dataset.ask("Which headphones should I buy?")
 dataset.ingest_source("source-uuid")
@@ -125,9 +133,25 @@ dataset.search("wireless headphones", hybrid: true, sparse_query: "headphones", 
 client.datasets.stats("dataset-uuid")
 client.datasets.search("dataset-uuid", "wireless headphones", top_k: 10)
 client.datasets.insert("dataset-uuid", vectors: [])
+client.datasets.delete_vectors("dataset-uuid", ids: ["sku-1", 42])
 ```
 
 `client.datasets.create` intentionally does not accept `index_type`; all datasets are created with SABLE.
+
+### Organization secrets
+
+```ruby
+# Store or rotate the default OpenAI org secret used by OpenAI embedding datasets.
+client.org_secrets.put_openai_api_key(api_key: ENV.fetch("OPENAI_API_KEY"))
+
+# Optionally validate before storing, or use a custom secret_ref.
+client.org_secrets.put_openai_api_key(
+  api_key: ENV.fetch("OPENAI_API_KEY"),
+  secret_ref: "emb:openai:api_key",
+  validate: true,
+  model: "text-embedding-3-small"
+)
+```
 
 ### Source documents
 
