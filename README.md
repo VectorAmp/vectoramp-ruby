@@ -153,6 +153,20 @@ client.org_secrets.put_openai_api_key(
 )
 ```
 
+Declare typed metadata at creation, then merge fields or replace the complete schema:
+
+```ruby
+schema = [
+  VectorAmp::MetadataSchema.field(:category, VectorAmp::MetadataSchema::STRING),
+  VectorAmp::MetadataSchema.field(:price, VectorAmp::MetadataSchema::F32)
+]
+dataset = client.datasets.create(name: "products", metadata_schema: schema)
+dataset.patch_metadata_schema([VectorAmp::MetadataSchema.field(:inventory, VectorAmp::MetadataSchema::U32)])
+dataset.replace_metadata_schema(schema) # [] removes all declared fields
+```
+
+Canonical types are `STRING`, `U32`, `I32`, `I64`, `F32`, and `F64`.
+
 ### Source documents
 
 Dataset document listing is cursor-based: pass `next_cursor` into the next request and do not assume offsets or totals. Downloads return retained original bytes and follow API/storage redirects.
@@ -360,6 +374,8 @@ equivalent `datasetObj.<m>(...)` on a returned `VectorAmp::Dataset`.
 | Method | Required | Optional (defaults) |
 |---|---|---|
 | `create(name:)` | `name` | `dim` (inferred), `embedding` (vectoramp/VectorAmp-Embedding-4B), `metric` ("cosine"), `hybrid`, `filters`, `metadata_schema`, `tuning`, `metadata` |
+| `patch_metadata_schema(id, schema)` | `id`, `schema` | — |
+| `replace_metadata_schema(id, schema)` | `id`, `schema` | — |
 | `list` | — | `limit` (50), `offset` (0) |
 | `get(id)` | `id` | — |
 | `delete(id)` | `id` | — |

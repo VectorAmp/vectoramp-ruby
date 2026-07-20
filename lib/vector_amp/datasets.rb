@@ -85,7 +85,7 @@ module VectorAmp
         index_type: "sable",
         hybrid: hybrid,
         filters: filters,
-        metadata_schema: metadata_schema,
+        schema: metadata_schema,
         tuning: tuning,
         metadata: metadata
       )
@@ -115,6 +115,21 @@ module VectorAmp
       create(name: name, embedding: Embedding.openai(size, secret_ref: secret_ref), **options)
     end
 
+    # Add or update typed metadata fields, retaining omitted fields.
+    # @param dataset_id [String] dataset id.
+    # @param schema [Array<Hash>] fields with `name` and canonical `type`.
+    # @return [Dataset] updated dataset.
+    def patch_metadata_schema(dataset_id, schema)
+      update_metadata_schema(dataset_id, schema, "merge")
+    end
+
+    # Replace the complete typed metadata schema.
+    # @param dataset_id [String] dataset id.
+    # @param schema [Array<Hash>] complete field list; may be empty.
+    # @return [Dataset] updated dataset.
+    def replace_metadata_schema(dataset_id, schema)
+      update_metadata_schema(dataset_id, schema, "replace")
+    end
 
     # List retained source documents for a dataset using cursor pagination.
     # @param dataset_id [String] dataset id.
@@ -266,6 +281,15 @@ module VectorAmp
       else
         raise ArgumentError, %(openai size must be "small" or "large", got #{size.inspect})
       end
+    end
+
+    def update_metadata_schema(dataset_id, schema, mode)
+      response = @transport.request(
+        :patch,
+        "/datasets/#{dataset_id}/schema",
+        body: { schema: schema, mode: mode }
+      )
+      wrap_dataset(response)
     end
 
     def wrap_dataset(data)

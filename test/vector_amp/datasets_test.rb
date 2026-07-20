@@ -80,6 +80,32 @@ class VectorAmpDatasetsTest < Minitest::Test
     assert_requested stub
   end
 
+  def test_create_and_update_metadata_schema
+    schema = [VectorAmp::MetadataSchema.field(:price, VectorAmp::MetadataSchema::F32)]
+    create = stub_request(:post, "#{API}/datasets")
+             .with(body: hash_including(schema: [{ name: "price", type: "f32" }]))
+             .to_return_json(status: 201, body: { id: "ds_1", schema_version: 1 })
+    merge = stub_request(:patch, "#{API}/datasets/ds_1/schema")
+            .with(body: { schema: schema, mode: "merge" })
+            .to_return_json(body: { id: "ds_1", schema_version: 2 })
+    replace = stub_request(:patch, "#{API}/datasets/ds_1/schema")
+              .with(body: { schema: schema, mode: "replace" })
+              .to_return_json(body: { id: "ds_1", schema_version: 3 })
+
+    dataset = @client.datasets.create(name: "products", metadata_schema: schema)
+    dataset.patch_metadata_schema(schema)
+    updated = @client.datasets.replace_metadata_schema("ds_1", schema)
+
+    assert_requested create
+    assert_requested merge
+    assert_requested replace
+    assert_equal 3, updated.fetch("schema_version")
+  end
+
+  def test_metadata_schema_helper_rejects_unknown_type
+    assert_raises(ArgumentError) { VectorAmp::MetadataSchema.field(:price, "decimal") }
+  end
+
   def test_create_with_openai_embedding_infers_dim
     stub = stub_request(:post, "#{API}/datasets")
            .with(body: hash_including(
