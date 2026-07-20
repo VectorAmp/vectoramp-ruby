@@ -106,6 +106,19 @@ class VectorAmpDatasetsTest < Minitest::Test
     assert_raises(ArgumentError) { VectorAmp::MetadataSchema.field(:price, "decimal") }
   end
 
+  def test_create_normalizes_legacy_metadata_schema_hash
+    create = stub_request(:post, "#{API}/datasets")
+             .with(body: hash_including(schema: [{ name: "title", type: "string" }]))
+             .to_return_json(status: 201, body: { id: "ds_legacy" })
+
+    @client.datasets.create(
+      name: "legacy",
+      metadata_schema: { title: { type: "string" } }
+    )
+
+    assert_requested create
+  end
+
   def test_create_with_openai_embedding_infers_dim
     stub = stub_request(:post, "#{API}/datasets")
            .with(body: hash_including(

@@ -59,7 +59,7 @@ module VectorAmp
     # @param metric [String] distance metric; defaults to `cosine`.
     # @param hybrid [Boolean, nil] enable hybrid (dense + sparse) search; sends `hybrid: true`.
     # @param filters [Hash, nil] optional filter schema/config.
-    # @param metadata_schema [Hash, nil] optional metadata schema.
+    # @param metadata_schema [Array<Hash>, Hash, nil] optional metadata schema.
     # @param tuning [Hash, nil] optional SABLE tuning parameters.
     # @param metadata [Hash, nil] optional dataset metadata.
     # @return [Dataset] created dataset.
@@ -85,7 +85,7 @@ module VectorAmp
         index_type: "sable",
         hybrid: hybrid,
         filters: filters,
-        schema: metadata_schema,
+        schema: normalize_metadata_schema(metadata_schema),
         tuning: tuning,
         metadata: metadata
       )
@@ -280,6 +280,16 @@ module VectorAmp
       when "large" then "text-embedding-3-large"
       else
         raise ArgumentError, %(openai size must be "small" or "large", got #{size.inspect})
+      end
+    end
+
+    def normalize_metadata_schema(schema)
+      return schema unless schema.is_a?(Hash)
+
+      schema.map do |name, config|
+        raise ArgumentError, "metadata schema field #{name.inspect} must be a Hash" unless config.is_a?(Hash)
+
+        { name: name.to_s }.merge(config)
       end
     end
 
