@@ -95,12 +95,21 @@ module VectorAmp
       service.delete(id)
     end
 
+    # Add or update typed metadata fields, retaining omitted fields.
+    def patch_metadata_schema(schema)
+      service.patch_metadata_schema(id, schema)
+    end
+
+    # Replace the complete typed metadata schema.
+    def replace_metadata_schema(schema)
+      service.replace_metadata_schema(id, schema)
+    end
+
     # Fetch stats for this dataset.
     # @return [Hash] dataset statistics.
     def stats
       service.stats(id)
     end
-
 
     # List retained source documents for this dataset using cursor pagination.
     # @param limit [Integer, nil] maximum documents to return.
