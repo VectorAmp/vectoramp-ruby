@@ -224,6 +224,102 @@ module VectorAmp
       ))
     end
 
+    # Create a GitHub source backed by the VectorAmp GitHub App.
+    #
+    # Install the VectorAmp GitHub App from the Sources page in the app first and
+    # pass the resulting installation id here; the SDK never handles a GitHub token.
+    # @param installation_id [Integer] required GitHub App installation id.
+    # @param repositories [String, Array<String>] required `owner/repo` full names.
+    # @param name [String, nil] defaults to `github-<owner>-<repo>` from the first repository.
+    # @param ref_mode [String, nil] `active` (server default), `default`, or `explicit`.
+    # @param refs [String, Array<String>, nil] explicit branch names for `ref_mode: "explicit"`.
+    # @param excluded_refs [String, Array<String>, nil] branch names to skip.
+    # @param active_branch_days [Integer, nil] activity window in days (1-90); server default 7.
+    # @param include_pull_requests [Boolean, nil] ingest pull requests; server default true.
+    # @param include_review_threads [Boolean, nil] ingest review discussions; server default true.
+    # @param include_direct_commits [Boolean, nil] ingest commits outside a pull request; server default true.
+    # @param include_globs [String, Array<String>, nil] path globs to include; server default `**/*`.
+    # @param exclude_globs [String, Array<String>, nil] path globs to skip.
+    # @param max_file_size_bytes [Integer, nil] per-file ceiling; server default 1_000_000.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param config [Hash] additional GitHub-source config forwarded to the API.
+    # @return [Hash] created source response.
+    def create_github(installation_id:, repositories:, name: nil, ref_mode: nil, refs: nil, excluded_refs: nil,
+                      active_branch_days: nil, include_pull_requests: nil, include_review_threads: nil,
+                      include_direct_commits: nil, include_globs: nil, exclude_globs: nil,
+                      max_file_size_bytes: nil, description: nil, metadata: nil, **config)
+      create_source(GitHubSource.new(
+        installation_id: installation_id,
+        repositories: repositories,
+        name: name,
+        ref_mode: ref_mode,
+        refs: refs,
+        excluded_refs: excluded_refs,
+        active_branch_days: active_branch_days,
+        include_pull_requests: include_pull_requests,
+        include_review_threads: include_review_threads,
+        include_direct_commits: include_direct_commits,
+        include_globs: include_globs,
+        exclude_globs: exclude_globs,
+        max_file_size_bytes: max_file_size_bytes,
+        description: description,
+        metadata: metadata,
+        **config
+      ))
+    end
+
+    # Create a GitLab source for gitlab.com or a self-managed instance.
+    # @param groups [String, Array<String>, nil] group paths; required unless projects is given.
+    # @param projects [String, Array<String>, nil] project paths with namespace; required unless groups is given.
+    # @param name [String, nil] defaults to `gitlab-<path>` from the first project or group.
+    # @param auth_mode [String] `oauth` (default) or `token`.
+    # @param gitlab_url [String] instance base URL; defaults to `https://gitlab.com`.
+    # @param access_token [String, nil] personal or group access token for `auth_mode: "token"`.
+    # @param connection_id [String, nil] optional stored OAuth connection id used instead of a token.
+    # @param ref_mode [String, nil] `active` (server default), `default`, or `explicit`.
+    # @param refs [String, Array<String>, nil] explicit branch names for `ref_mode: "explicit"`.
+    # @param excluded_refs [String, Array<String>, nil] branch names to skip.
+    # @param active_branch_days [Integer, nil] activity window in days (1-90); server default 7.
+    # @param include_merge_requests [Boolean, nil] ingest merge requests; server default true.
+    # @param include_review_threads [Boolean, nil] ingest review discussions; server default true.
+    # @param include_direct_commits [Boolean, nil] ingest commits outside a merge request; server default true.
+    # @param include_globs [String, Array<String>, nil] path globs to include; server default `**/*`.
+    # @param exclude_globs [String, Array<String>, nil] path globs to skip.
+    # @param max_file_size_bytes [Integer, nil] per-file ceiling; server default 1_000_000.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param config [Hash] additional GitLab-source config forwarded to the API.
+    # @return [Hash] created source response.
+    def create_gitlab(groups: nil, projects: nil, name: nil, auth_mode: "oauth", gitlab_url: "https://gitlab.com",
+                      access_token: nil, connection_id: nil, ref_mode: nil, refs: nil, excluded_refs: nil,
+                      active_branch_days: nil, include_merge_requests: nil, include_review_threads: nil,
+                      include_direct_commits: nil, include_globs: nil, exclude_globs: nil,
+                      max_file_size_bytes: nil, description: nil, metadata: nil, **config)
+      create_source(GitLabSource.new(
+        groups: groups,
+        projects: projects,
+        name: name,
+        auth_mode: auth_mode,
+        gitlab_url: gitlab_url,
+        access_token: access_token,
+        connection_id: connection_id,
+        ref_mode: ref_mode,
+        refs: refs,
+        excluded_refs: excluded_refs,
+        active_branch_days: active_branch_days,
+        include_merge_requests: include_merge_requests,
+        include_review_threads: include_review_threads,
+        include_direct_commits: include_direct_commits,
+        include_globs: include_globs,
+        exclude_globs: exclude_globs,
+        max_file_size_bytes: max_file_size_bytes,
+        description: description,
+        metadata: metadata,
+        **config
+      ))
+    end
+
     # Create a file-upload source.
     # @param name [String, nil] defaults to timestamped `ruby-sdk-file-upload-YYYYmmddHHMMSS`.
     # @param description [String, nil] optional description.
@@ -386,6 +482,8 @@ module VectorAmp
       when "jira" then SourceNames.jira(project_keys: config[:project_keys] || config["project_keys"], cloud_id: config[:cloud_id] || config["cloud_id"])
       when "confluence" then SourceNames.confluence(spaces: config[:spaces] || config["spaces"], cloud_id: config[:cloud_id] || config["cloud_id"], base_url: config[:base_url] || config["base_url"])
       when "gdrive" then SourceNames.google_drive(folder_ids: config[:folder_ids] || config["folder_ids"], file_ids: config[:file_ids] || config["file_ids"])
+      when "github" then SourceNames.github(repositories: config[:repositories] || config["repositories"])
+      when "gitlab" then SourceNames.gitlab(projects: config[:projects] || config["projects"], groups: config[:groups] || config["groups"])
       end
     end
 

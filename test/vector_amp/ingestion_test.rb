@@ -189,6 +189,156 @@ class VectorAmpIngestionTest < Minitest::Test
                  @client.sources.create_source(source_type: "confluence", config: { cloud_id: "c", spaces: ["ENG"] }).fetch("id")
   end
 
+  def test_github_source_builder
+    github = VectorAmp::GitHubSource.new(installation_id: 42, repositories: ["octo/hello-world"])
+
+    assert_equal "github", github.source_type
+    assert_equal "github-octo-hello-world", github.name
+    assert_equal 42, github.config.fetch(:installation_id)
+    assert_equal ["octo/hello-world"], github.config.fetch(:repositories)
+    assert_includes VectorAmp::Source::SUPPORTED_SOURCE_TYPES, "github"
+
+    # Optional settings stay out of the config so the server applies its defaults.
+    refute github.config.key?(:ref_mode)
+    refute github.config.key?(:include_pull_requests)
+    refute github.config.key?(:sync_mode)
+  end
+
+  def test_github_source_builder_serializes_options
+    github = VectorAmp::GitHubSource.new(
+      name: "Platform repos",
+      installation_id: 7,
+      repositories: "acme/api",
+      ref_mode: "explicit",
+      refs: "main",
+      excluded_refs: ["wip"],
+      active_branch_days: 30,
+      include_pull_requests: false,
+      include_review_threads: false,
+      include_direct_commits: false,
+      include_globs: "docs/**",
+      exclude_globs: ["**/*.lock"],
+      max_file_size_bytes: 2_000_000,
+      sync_mode: "full"
+    )
+
+    assert_equal "Platform repos", github.name
+    assert_equal ["acme/api"], github.config.fetch(:repositories)
+    assert_equal "explicit", github.config.fetch(:ref_mode)
+    assert_equal ["main"], github.config.fetch(:refs)
+    assert_equal ["wip"], github.config.fetch(:excluded_refs)
+    assert_equal 30, github.config.fetch(:active_branch_days)
+    assert_equal false, github.config.fetch(:include_pull_requests)
+    assert_equal false, github.config.fetch(:include_review_threads)
+    assert_equal false, github.config.fetch(:include_direct_commits)
+    assert_equal ["docs/**"], github.config.fetch(:include_globs)
+    assert_equal ["**/*.lock"], github.config.fetch(:exclude_globs)
+    assert_equal 2_000_000, github.config.fetch(:max_file_size_bytes)
+    assert_equal "full", github.config.fetch(:sync_mode)
+  end
+
+  def test_gitlab_source_builder
+    gitlab = VectorAmp::GitLabSource.new(projects: ["mygroup/myproject"])
+
+    assert_equal "gitlab", gitlab.source_type
+    assert_equal "gitlab-mygroup-myproject", gitlab.name
+    assert_equal "oauth", gitlab.config.fetch(:auth_mode)
+    assert_equal "https://gitlab.com", gitlab.config.fetch(:gitlab_url)
+    assert_equal ["mygroup/myproject"], gitlab.config.fetch(:projects)
+    refute gitlab.config.key?(:groups)
+    assert_includes VectorAmp::Source::SUPPORTED_SOURCE_TYPES, "gitlab"
+
+    # Group-only sources fall back to the group for the default name.
+    group_source = VectorAmp::GitLabSource.new(groups: "mygroup")
+    assert_equal "gitlab-mygroup", group_source.name
+    assert_equal ["mygroup"], group_source.config.fetch(:groups)
+    refute group_source.config.key?(:projects)
+  end
+
+  def test_gitlab_source_builder_token_auth_and_connection_id
+    token_source = VectorAmp::GitLabSource.new(
+      projects: ["g/p"],
+      auth_mode: "token",
+      gitlab_url: "https://gitlab.example.com",
+      access_token: "glpat-secret",
+      include_merge_requests: false,
+      max_file_size_bytes: 500_000
+    )
+
+    assert_equal "token", token_source.config.fetch(:auth_mode)
+    assert_equal "https://gitlab.example.com", token_source.config.fetch(:gitlab_url)
+    assert_equal "glpat-secret", token_source.config.fetch(:access_token)
+    assert_equal false, token_source.config.fetch(:include_merge_requests)
+    assert_equal 500_000, token_source.config.fetch(:max_file_size_bytes)
+    refute token_source.config.key?(:connection_id)
+
+    connection_source = VectorAmp::GitLabSource.new(groups: ["g"], connection_id: "conn_gl")
+    assert_equal "conn_gl", connection_source.config.fetch(:connection_id)
+    refute connection_source.config.key?(:access_token)
+  end
+
+  def test_source_control_sources_validate_required_fields
+    assert_raises(ArgumentError) { VectorAmp::GitHubSource.new(installation_id: 0, repositories: ["o/r"]) }
+    assert_raises(ArgumentError) { VectorAmp::GitHubSource.new(installation_id: "42", repositories: ["o/r"]) }
+    assert_raises(ArgumentError) { VectorAmp::GitHubSource.new(installation_id: 42, repositories: []) }
+    assert_raises(ArgumentError) { VectorAmp::GitLabSource.new }
+    assert_raises(ArgumentError) { VectorAmp::GitLabSource.new(groups: [], projects: []) }
+  end
+
+  def test_create_github_and_gitlab_helpers_post_sources
+    github_stub = stub_request(:post, "#{API}/ingestion/sources")
+                  .with { |request|
+                    body = JSON.parse(request.body)
+                    body["source_type"] == "github" &&
+                      body["name"] == "github-octo-hello-world" &&
+                      body["config"] == { "installation_id" => 42, "repositories" => ["octo/hello-world"] }
+                  }
+                  .to_return_json(status: 201, body: { id: "src_gh" })
+
+    assert_equal "src_gh",
+                 @client.sources.create_github(installation_id: 42, repositories: ["octo/hello-world"]).fetch("id")
+    assert_requested github_stub
+
+    gitlab_stub = stub_request(:post, "#{API}/ingestion/sources")
+                  .with { |request|
+                    body = JSON.parse(request.body)
+                    body["source_type"] == "gitlab" &&
+                      body["name"] == "gitlab-mygroup-myproject" &&
+                      body["config"]["auth_mode"] == "token" &&
+                      body["config"]["access_token"] == "glpat-secret" &&
+                      body["config"]["projects"] == ["mygroup/myproject"]
+                  }
+                  .to_return_json(status: 201, body: { id: "src_gl" })
+
+    assert_equal "src_gl",
+                 @client.sources.create_gitlab(
+                   projects: ["mygroup/myproject"],
+                   auth_mode: "token",
+                   access_token: "glpat-secret"
+                 ).fetch("id")
+    assert_requested gitlab_stub
+  end
+
+  def test_create_source_defaults_source_control_names
+    stub_request(:post, "#{API}/ingestion/sources")
+      .with(body: hash_including(source_type: "github", name: "github-octo-hello-world"))
+      .to_return_json(status: 201, body: { id: "src_gh" })
+    stub_request(:post, "#{API}/ingestion/sources")
+      .with(body: hash_including(source_type: "gitlab", name: "gitlab-mygroup"))
+      .to_return_json(status: 201, body: { id: "src_gl" })
+
+    assert_equal "src_gh",
+                 @client.sources.create_source(
+                   source_type: "github",
+                   config: { installation_id: 42, repositories: ["octo/hello-world"] }
+                 ).fetch("id")
+    assert_equal "src_gl",
+                 @client.sources.create_source(
+                   source_type: "gitlab",
+                   config: { groups: ["mygroup"] }
+                 ).fetch("id")
+  end
+
   def test_ingest_files_uploads_to_presigned_url_and_completes
     file = Tempfile.new(["vectoramp", ".txt"])
     file.write("hello")
