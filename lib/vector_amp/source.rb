@@ -10,7 +10,7 @@ module VectorAmp
   # create a source or to `dataset.ingest_source(source)` once they include an id
   # returned by the API.
   class Source
-    SUPPORTED_SOURCE_TYPES = %w[s3 web gcs gdrive file_upload jira confluence].freeze
+    SUPPORTED_SOURCE_TYPES = %w[s3 web gcs gdrive file_upload jira confluence github gitlab].freeze
 
     # @return [String, nil] API source id when returned by the API.
     # @return [String] source type (`s3`, `web`, `gdrive`, or `file_upload`).
@@ -162,6 +162,28 @@ module VectorAmp
       host && !host.empty? ? host : nil
     rescue URI::InvalidURIError
       nil
+    end
+
+    # @param repositories [String, Array<String>, nil] `owner/repo` full names.
+    # @return [String] `github-<owner>-<repo>` from the first repository, or `github-source`.
+    def github(repositories: nil)
+      repository = Array(repositories).first
+      repository ? "github-#{slugify(repository)}" : "github-source"
+    end
+
+    # @param projects [String, Array<String>, nil] project paths with namespace.
+    # @param groups [String, Array<String>, nil] group paths.
+    # @return [String] `gitlab-<path>` from the first project or group, or `gitlab-source`.
+    def gitlab(projects: nil, groups: nil)
+      path = Array(projects).first || Array(groups).first
+      path ? "gitlab-#{slugify(path)}" : "gitlab-source"
+    end
+
+    # Lowercase a repository/group path into a dash-separated name fragment.
+    # @param value [String] path such as `owner/repo` or `group/subgroup/project`.
+    # @return [String]
+    def slugify(value)
+      value.to_s.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-+|-+\z/, "")
     end
 
     # @param folder_ids [String, Array<String>, nil] folder ids.
@@ -355,6 +377,133 @@ module VectorAmp
           spaces: spaces.nil? ? nil : Array(spaces),
           include_attachments: include_attachments,
           connection_id: connection_id
+        ))
+      )
+    end
+  end
+
+  # GitHub ingestion source backed by the VectorAmp GitHub App.
+  #
+  # Repositories, active branches, pull requests, and review discussions are read
+  # through a GitHub App installation, so no token is passed to the SDK. Install
+  # the VectorAmp GitHub App from the Sources page in the app first; the
+  # installation id shown there is what this class needs.
+  class GitHubSource < Source
+    # @param installation_id [Integer] required GitHub App installation id; must be positive.
+    # @param repositories [String, Array<String>] required `owner/repo` full names.
+    # @param name [String, nil] defaults to `github-<owner>-<repo>` from the first repository.
+    # @param ref_mode [String, nil] `active` (server default), `default`, or `explicit`.
+    # @param refs [String, Array<String>, nil] explicit branch names for `ref_mode: "explicit"`.
+    # @param excluded_refs [String, Array<String>, nil] branch names to skip.
+    # @param active_branch_days [Integer, nil] activity window in days (1-90); server default 7.
+    # @param include_pull_requests [Boolean, nil] ingest pull requests; server default true.
+    # @param include_review_threads [Boolean, nil] ingest review discussions; server default true.
+    # @param include_direct_commits [Boolean, nil] ingest commits outside a pull request; server default true.
+    # @param include_globs [String, Array<String>, nil] path globs to include; server default `**/*`.
+    # @param exclude_globs [String, Array<String>, nil] path globs to skip.
+    # @param max_file_size_bytes [Integer, nil] per-file ceiling (1-25_000_000); server default 1_000_000.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param id [String, nil] optional API source id.
+    # @param config [Hash] additional GitHub-source config forwarded to the API.
+    # @return [GitHubSource]
+    def initialize(installation_id:, repositories:, name: nil, ref_mode: nil, refs: nil, excluded_refs: nil,
+                   active_branch_days: nil, include_pull_requests: nil, include_review_threads: nil,
+                   include_direct_commits: nil, include_globs: nil, exclude_globs: nil, max_file_size_bytes: nil,
+                   description: nil, metadata: nil, id: nil, **config)
+      unless installation_id.is_a?(Integer) && installation_id.positive?
+        raise ArgumentError, "installation_id must be a positive Integer"
+      end
+
+      repository_list = Array(repositories)
+      raise ArgumentError, "repositories must not be empty" if repository_list.empty?
+
+      super(
+        id: id,
+        source_type: "github",
+        name: name || SourceNames.github(repositories: repository_list),
+        description: description,
+        metadata: metadata,
+        config: Utils.compact_hash(config.merge(
+          installation_id: installation_id,
+          repositories: repository_list,
+          ref_mode: ref_mode,
+          refs: refs.nil? ? nil : Array(refs),
+          excluded_refs: excluded_refs.nil? ? nil : Array(excluded_refs),
+          active_branch_days: active_branch_days,
+          include_pull_requests: include_pull_requests,
+          include_review_threads: include_review_threads,
+          include_direct_commits: include_direct_commits,
+          include_globs: include_globs.nil? ? nil : Array(include_globs),
+          exclude_globs: exclude_globs.nil? ? nil : Array(exclude_globs),
+          max_file_size_bytes: max_file_size_bytes
+        ))
+      )
+    end
+  end
+
+  # GitLab ingestion source for gitlab.com or a self-managed instance.
+  #
+  # Authenticates with an access token (`auth_mode: "token"` plus `access_token`)
+  # or a stored OAuth connection (`connection_id`). At least one group or project
+  # is required.
+  class GitLabSource < Source
+    # @param groups [String, Array<String>, nil] group paths; required unless projects is given.
+    # @param projects [String, Array<String>, nil] project paths with namespace; required unless groups is given.
+    # @param name [String, nil] defaults to `gitlab-<path>` from the first project or group.
+    # @param auth_mode [String] `oauth` (default) or `token`.
+    # @param gitlab_url [String] instance base URL; defaults to `https://gitlab.com`.
+    # @param access_token [String, nil] personal or group access token for `auth_mode: "token"`.
+    # @param connection_id [String, nil] optional stored OAuth connection id used instead of a token.
+    # @param ref_mode [String, nil] `active` (server default), `default`, or `explicit`.
+    # @param refs [String, Array<String>, nil] explicit branch names for `ref_mode: "explicit"`.
+    # @param excluded_refs [String, Array<String>, nil] branch names to skip.
+    # @param active_branch_days [Integer, nil] activity window in days (1-90); server default 7.
+    # @param include_merge_requests [Boolean, nil] ingest merge requests; server default true.
+    # @param include_review_threads [Boolean, nil] ingest review discussions; server default true.
+    # @param include_direct_commits [Boolean, nil] ingest commits outside a merge request; server default true.
+    # @param include_globs [String, Array<String>, nil] path globs to include; server default `**/*`.
+    # @param exclude_globs [String, Array<String>, nil] path globs to skip.
+    # @param max_file_size_bytes [Integer, nil] per-file ceiling (1-25_000_000); server default 1_000_000.
+    # @param description [String, nil] optional description.
+    # @param metadata [Hash, nil] optional metadata.
+    # @param id [String, nil] optional API source id.
+    # @param config [Hash] additional GitLab-source config forwarded to the API.
+    # @return [GitLabSource]
+    def initialize(groups: nil, projects: nil, name: nil, auth_mode: "oauth", gitlab_url: "https://gitlab.com",
+                   access_token: nil, connection_id: nil, ref_mode: nil, refs: nil, excluded_refs: nil,
+                   active_branch_days: nil, include_merge_requests: nil, include_review_threads: nil,
+                   include_direct_commits: nil, include_globs: nil, exclude_globs: nil, max_file_size_bytes: nil,
+                   description: nil, metadata: nil, id: nil, **config)
+      group_list = Array(groups)
+      project_list = Array(projects)
+      if group_list.empty? && project_list.empty?
+        raise ArgumentError, "groups or projects is required"
+      end
+
+      super(
+        id: id,
+        source_type: "gitlab",
+        name: name || SourceNames.gitlab(projects: project_list, groups: group_list),
+        description: description,
+        metadata: metadata,
+        config: Utils.compact_hash(config.merge(
+          auth_mode: auth_mode,
+          gitlab_url: gitlab_url,
+          groups: group_list.empty? ? nil : group_list,
+          projects: project_list.empty? ? nil : project_list,
+          access_token: access_token,
+          connection_id: connection_id,
+          ref_mode: ref_mode,
+          refs: refs.nil? ? nil : Array(refs),
+          excluded_refs: excluded_refs.nil? ? nil : Array(excluded_refs),
+          active_branch_days: active_branch_days,
+          include_merge_requests: include_merge_requests,
+          include_review_threads: include_review_threads,
+          include_direct_commits: include_direct_commits,
+          include_globs: include_globs.nil? ? nil : Array(include_globs),
+          exclude_globs: exclude_globs.nil? ? nil : Array(exclude_globs),
+          max_file_size_bytes: max_file_size_bytes
         ))
       )
     end

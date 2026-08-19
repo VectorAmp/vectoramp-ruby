@@ -197,7 +197,8 @@ client.ingestion.list_sources(limit: 50, offset: 0)
 client.ingestion.get_source("source-uuid")
 
 # Typed builders cover the supported source_type values:
-# "web", "s3", "gcs", "gdrive", "file_upload", "jira", and "confluence".
+# "web", "s3", "gcs", "gdrive", "file_upload", "jira", "confluence",
+# "github", and "gitlab".
 source = client.sources.create_web(
   start_urls: ["https://docs.example.com"],
   max_depth: 1,
@@ -227,6 +228,20 @@ confluence_source = client.sources.create_confluence(
 
 gdrive_source = client.sources.create_google_drive(
   folder_ids: ["google-drive-folder-id"]
+)
+
+# GitHub reads through the VectorAmp GitHub App, so the SDK never takes a token.
+# Install the app from the Sources page and pass the installation id it reports.
+github_source = client.sources.create_github(
+  installation_id: 42,
+  repositories: ["acme/api", "acme/web"]
+)
+
+gitlab_source = client.sources.create_gitlab(
+  projects: ["mygroup/myproject"], # and/or groups: ["mygroup"]
+  auth_mode: "token",              # defaults to "oauth"
+  access_token: ENV["GITLAB_TOKEN"],
+  gitlab_url: "https://gitlab.com" # override for self-managed
 )
 
 file_source = client.sources.create_file_upload
@@ -406,7 +421,8 @@ Dataset-object helpers: `search`, `insert`, `add_texts`, `embed`, `delete`, `sta
 
 `create(source)`, `create_web(start_urls:)`, `create_s3(bucket:)`, `create_gcs(bucket:)`,
 `create_google_drive(folder_ids:|file_ids:)`, `create_jira(cloud_id:)`,
-`create_confluence(cloud_id:|base_url:)`, `create_file_upload`, `list_sources`, `get_source(id)`.
+`create_confluence(cloud_id:|base_url:)`, `create_github(installation_id:, repositories:)`,
+`create_gitlab(groups:|projects:)`, `create_file_upload`, `list_sources`, `get_source(id)`.
 Jobs: `start_job(source_id:, dataset_id:)`, `list_jobs`, `get_job(id)`, `retry_job(id)`,
 `ingest_files(dataset_id:, paths:)`.
 
