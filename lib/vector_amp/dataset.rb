@@ -129,11 +129,11 @@ module VectorAmp
 
     # Ask an intelligence question constrained to this dataset.
     # @param query [String] natural-language question.
-    # @param options [Hash] forwarded to {Client#ask}; `dataset_id` is set to this dataset id.
+    # @param options [Hash] forwarded to {Client#ask}; `dataset_ids` is set to this dataset id.
     # @return [Hash] intelligence response.
     def ask(query, **options)
       require_client!("ask")
-      client.ask(query, **options.merge(dataset_id: id))
+      client.ask(query, **options.merge(dataset_ids: [id]))
     end
 
     # Upload local files by auto-creating a `file_upload` source, initializing presigned uploads, and completing the upload job.

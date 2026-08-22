@@ -306,10 +306,12 @@ Non-streaming:
 ```ruby
 answer = client.ask(
   "What are the key features?",
-  dataset_id: "all",
-  top_k: 5
+  top_k: 5           # omit dataset_ids to search every dataset you can see
 )
 puts answer["answer"]
+
+# Scope one question to any number of datasets:
+answer = client.ask("Which contracts renew in Q4?", dataset_ids: %w[ds_contracts ds_invoices])
 ```
 
 Multi-turn conversations: the Intelligence API is stateless, so send prior turns
@@ -323,7 +325,6 @@ history = [
 
 follow_up = client.intelligence.query(
   "Which of those help with relevance?",
-  dataset_id: "all",
   conversation_history: history.last(10) # include as many prior turns as you want
 )
 puts follow_up["answer"]
@@ -332,7 +333,7 @@ puts follow_up["answer"]
 Streaming SSE:
 
 ```ruby
-client.ask_stream("Summarize the docs", dataset_id: "dataset-uuid") do |event|
+client.ask_stream("Summarize the docs", dataset_ids: ["dataset-uuid"]) do |event|
   print event["content"] if event["chunk_type"] == "text"
 end
 
@@ -409,7 +410,7 @@ Dataset-object helpers: `search`, `insert`, `add_texts`, `embed`, `delete`, `sta
 
 | Method | Required | Optional (defaults) |
 |---|---|---|
-| `query(query)` / `ask` / `ask_stream` | `query` | `dataset_id` ("all" when unscoped), `top_k` (5 server-side), `conversation_history`, `include_sources`, `stream` |
+| `query(query)` / `ask` / `ask_stream` | `query` | `dataset_ids` (array; omit to search every visible dataset), `top_k` (5 server-side), `conversation_history`, `include_sources`, `stream` |
 | `create_session` | — | `title`, `dataset_id`, `workspace_id`, `metadata` |
 | `list_sessions` | — | `limit` (50) |
 | `get_session(session_id)` | `session_id` | — |

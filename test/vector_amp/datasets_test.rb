@@ -325,7 +325,7 @@ class VectorAmpDatasetsTest < Minitest::Test
       .with(body: { ids: ["a"] })
       .to_return_json(body: { deleted: 1, dataset_id: "ds_1" })
     stub_request(:post, "#{API}/intelligence/query")
-      .with(body: hash_including(query: "question", dataset_id: "ds_1"))
+      .with(body: hash_including(query: "question", dataset_ids: ["ds_1"]))
       .to_return_json(body: { answer: "42" })
     stub_request(:get, "#{API}/datasets/ds_1/stats").to_return_json(body: { vector_count: 1 })
 
