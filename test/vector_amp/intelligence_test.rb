@@ -11,12 +11,48 @@ class VectorAmpIntelligenceTest < Minitest::Test
 
   def test_non_streaming_ask
     stub_request(:post, "#{API}/intelligence/query")
-      .with(body: { query: "What?", dataset_id: "all", stream: false })
+      .with(body: { query: "What?", dataset_ids: ["ds_1"], stream: false })
       .to_return_json(body: { answer: "42", sources: [], chunks: [], metadata: {} })
 
-    response = @client.ask("What?", dataset_id: "all")
+    response = @client.ask("What?", dataset_ids: ["ds_1"])
 
     assert_equal "42", response.fetch("answer")
+  end
+
+  def test_ask_scopes_to_every_requested_dataset
+    stub_request(:post, "#{API}/intelligence/query")
+      .with(body: { query: "What?", dataset_ids: %w[ds_1 ds_2 ds_3], stream: false })
+      .to_return_json(body: { answer: "42", sources: [], chunks: [], metadata: {} })
+
+    response = @client.ask("What?", dataset_ids: %w[ds_1 ds_2 ds_3])
+
+    assert_equal "42", response.fetch("answer")
+  end
+
+  def test_unscoped_ask_omits_dataset_ids
+    # An absent dataset_ids is how the API says "every dataset you can see". The
+    # retired dataset_id -- and its "all" sentinel -- now draw a 400.
+    [nil, [], ["all"], ["", "  "]].each do |scope|
+      stub_request(:post, "#{API}/intelligence/query")
+        .with { |request| !JSON.parse(request.body).key?("dataset_ids") && !JSON.parse(request.body).key?("dataset_id") }
+        .to_return_json(body: { answer: "42" })
+
+      assert_equal "42", @client.ask("What?", dataset_ids: scope).fetch("answer")
+    end
+  end
+
+  def test_ask_rejects_the_retired_dataset_id_option
+    error = assert_raises(ArgumentError) { @client.ask("What?", dataset_id: "ds_1") }
+
+    assert_match(/dataset_id/, error.message)
+  end
+
+  def test_ask_accepts_a_bare_dataset_id_string
+    stub_request(:post, "#{API}/intelligence/query")
+      .with(body: { query: "What?", dataset_ids: ["ds_1"], stream: false })
+      .to_return_json(body: { answer: "42" })
+
+    assert_equal "42", @client.ask("What?", dataset_ids: "ds_1").fetch("answer")
   end
 
   def test_multi_turn_sends_conversation_history
@@ -27,7 +63,7 @@ class VectorAmpIntelligenceTest < Minitest::Test
     stub_request(:post, "#{API}/intelligence/query")
       .with(body: {
         query: "Does it support hybrid search?",
-        dataset_id: "ds_1",
+        dataset_ids: ["ds_1"],
         conversation_history: history,
         stream: false
       })
@@ -35,7 +71,7 @@ class VectorAmpIntelligenceTest < Minitest::Test
 
     response = @client.intelligence.query(
       "Does it support hybrid search?",
-      dataset_id: "ds_1",
+      dataset_ids: ["ds_1"],
       conversation_history: history
     )
 

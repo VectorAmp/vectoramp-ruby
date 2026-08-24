@@ -11,20 +11,24 @@ module VectorAmp
       @transport = transport
     end
 
-    # Ask an intelligence query, optionally scoped to a dataset and streamed.
+    # Ask an intelligence query, optionally scoped to datasets and streamed.
     # @param query [String] natural-language question.
-    # @param dataset_id [String, nil] optional dataset id scope.
+    # @param dataset_ids [Array<String>, String, nil] datasets to scope the question to; omit to
+    #   search every dataset the API key can see.
     # @param top_k [Integer, nil] optional retrieval result count.
     # @param conversation_history [Array<Hash>, nil] optional prior conversation messages.
     # @param include_sources [Boolean, nil] include source chunks/citations when supported.
     # @param stream [Boolean] stream chunks when true; defaults to false.
     # @yieldparam chunk [Object] streamed response chunk when stream is true.
     # @return [Hash, Enumerator, Object] response hash, enumerator without a stream block, or transport stream result.
-    def query(query, dataset_id: nil, top_k: nil, conversation_history: nil, include_sources: nil, stream: false, **unknown, &block)
+    def query(query, dataset_ids: nil, top_k: nil, conversation_history: nil, include_sources: nil, stream: false, **unknown, &block)
       Utils.ensure_no_unknown!(unknown, "query")
+      scope = self.class.normalize_dataset_ids(dataset_ids)
       body = Utils.compact_hash(
         query: query,
-        dataset_id: dataset_id,
+        # An absent dataset_ids is how the API says "every dataset you can see";
+        # an empty array would be a narrower, different request.
+        dataset_ids: scope.empty? ? nil : scope,
         top_k: top_k,
         conversation_history: conversation_history,
         include_sources: include_sources,
@@ -32,7 +36,7 @@ module VectorAmp
       )
 
       if stream
-        return enum_for(:query, query, dataset_id: dataset_id, top_k: top_k,
+        return enum_for(:query, query, dataset_ids: dataset_ids, top_k: top_k,
                         conversation_history: conversation_history, include_sources: include_sources,
                         stream: true) unless block
 
@@ -40,6 +44,18 @@ module VectorAmp
       else
         @transport.request(:post, "/intelligence/query", body: body)
       end
+    end
+
+    # Normalize a dataset scope for the wire.
+    #
+    # `POST /intelligence/query` scopes with `dataset_ids` and reads an absent field as "every
+    # dataset the caller can see". The singular `dataset_id` is retired and now draws a 400, and
+    # the `"all"` sentinel it carried says nothing an omitted field does not, so both are dropped
+    # here rather than transmitted.
+    # @param dataset_ids [Array<String>, String, nil] requested scope.
+    # @return [Array<String>] normalized dataset ids.
+    def self.normalize_dataset_ids(dataset_ids)
+      Array(dataset_ids).map { |id| id.to_s.strip }.reject { |id| id.empty? || id == "all" }
     end
 
     # Create an intelligence conversation session.
