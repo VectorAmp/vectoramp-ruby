@@ -403,7 +403,7 @@ module VectorAmp
     # @param description [String, nil] optional source description.
     # @param metadata [Hash] optional source metadata merged with dataset_id.
     # @return [Hash] upload completion/job response.
-    def ingest_files(dataset_id:, paths:, source_name: nil, description: nil, metadata: {})
+    def ingest_files(dataset_id:, paths:, source_name: nil, description: nil, metadata: {}, security_scope_key: nil)
       files = Array(paths).map { |path| Pathname(path) }
       raise ArgumentError, "paths must not be empty" if files.empty?
 
@@ -414,7 +414,7 @@ module VectorAmp
       )
       source_id = source.fetch("id") { source.fetch(:id) }
 
-      init = init_upload(source_id, files)
+      init = init_upload(source_id, files, security_scope_key: security_scope_key)
       upload_files_to_presigned_urls(files, init.fetch("uploads"))
       job_id = init.fetch("job_id")
       response = complete_upload(source_id, job_id: job_id, file_ids: init.fetch("uploads").map { |upload| upload.fetch("file_id") })
@@ -426,7 +426,7 @@ module VectorAmp
     # @param source_id [String] file-upload source id.
     # @param files [Array<String, Pathname>] local files.
     # @return [Hash] init response containing uploads and job_id.
-    def init_upload(source_id, files)
+    def init_upload(source_id, files, security_scope_key: nil)
       payload = Array(files).map do |file|
         path = Pathname(file)
         {
@@ -435,7 +435,11 @@ module VectorAmp
           content_type: content_type_for(path)
         }
       end
-      @transport.request(:post, "/ingestion/sources/#{source_id}/upload/init", body: { files: payload })
+      @transport.request(
+        :post,
+        "/ingestion/sources/#{source_id}/upload/init",
+        body: Utils.compact_hash(files: payload, security_scope_key: security_scope_key)
+      )
     end
 
     # Complete a file upload job after files have been PUT to presigned URLs.

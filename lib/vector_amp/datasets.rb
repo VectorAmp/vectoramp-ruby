@@ -251,7 +251,7 @@ module VectorAmp
     # @param ids [Array, nil] optional ids; generated UUIDs when omitted.
     # @param metadata [Hash, Array<Hash>, nil] metadata applied to all texts or per-text.
     # @return [Hash] insert response.
-    def add_texts(dataset_id, texts_arg = nil, texts: nil, ids: nil, metadata: nil)
+    def add_texts(dataset_id, texts_arg = nil, texts: nil, ids: nil, metadata: nil, security_scope_key: nil)
       texts = Array(texts || texts_arg)
       raise ArgumentError, "texts must not be empty" if texts.empty?
       raise ArgumentError, "ids length must match texts length" if ids && ids.length != texts.length
@@ -263,11 +263,12 @@ module VectorAmp
       embeddings = response.fetch("embeddings")
       vectors = texts.each_with_index.map do |text, index|
         item_metadata = metadata.is_a?(Array) ? metadata[index] : metadata
-        {
+        Utils.compact_hash(
           id: ids ? Utils.coerce_vector_id(ids[index]) : SecureRandom.uuid,
           values: embeddings[index],
-          metadata: Utils.compact_hash((item_metadata || {}).merge(text: text))
-        }
+          metadata: Utils.compact_hash((item_metadata || {}).merge(text: text)),
+          security_scope_key: security_scope_key
+        )
       end
       insert(dataset_id, vectors: vectors)
     end

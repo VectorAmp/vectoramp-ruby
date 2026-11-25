@@ -85,8 +85,8 @@ module VectorAmp
     # @param ids [Array<String>, nil] optional ids; generated UUIDs when omitted.
     # @param metadata [Hash, Array<Hash>, nil] metadata applied to all texts or per-text.
     # @return [Hash] insert response.
-    def add_texts(texts_arg = nil, texts: nil, ids: nil, metadata: nil)
-      service.add_texts(id, texts_arg, texts: texts, ids: ids, metadata: metadata)
+    def add_texts(texts_arg = nil, texts: nil, ids: nil, metadata: nil, security_scope_key: nil)
+      service.add_texts(id, texts_arg, texts: texts, ids: ids, metadata: metadata, security_scope_key: security_scope_key)
     end
 
     # Delete this dataset.
@@ -142,14 +142,15 @@ module VectorAmp
     # @param description [String, nil] optional source description.
     # @param metadata [Hash] optional source metadata; dataset_id is added automatically.
     # @return [Hash] upload completion/job response.
-    def ingest_files(paths:, source_name: nil, description: nil, metadata: {})
+    def ingest_files(paths:, source_name: nil, description: nil, metadata: {}, security_scope_key: nil)
       require_client!("ingest_files")
       client.ingestion.ingest_files(
         dataset_id: id,
         paths: paths,
         source_name: source_name,
         description: description,
-        metadata: metadata
+        metadata: metadata,
+        security_scope_key: security_scope_key
       )
     end
 

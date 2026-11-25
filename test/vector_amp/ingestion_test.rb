@@ -353,14 +353,23 @@ class VectorAmpIngestionTest < Minitest::Test
       }
       .to_return_json(status: 201, body: { id: "src_1" })
     stub_request(:post, "#{API}/ingestion/sources/src_1/upload/init")
-      .with { |request| JSON.parse(request.body).fetch("files").first.fetch("content_type") == "text/plain" }
+      .with { |request|
+        body = JSON.parse(request.body)
+        body.fetch("files").first.fetch("content_type") == "text/plain" &&
+          body.fetch("security_scope_key") == "tenant-acme"
+      }
       .to_return_json(body: { job_id: "job_1", uploads: [{ file_id: "file_1", file_name: File.basename(file.path), upload_url: "https://uploads.test/file_1" }] })
     upload = stub_request(:put, "https://uploads.test/file_1").with(body: "hello").to_return(status: 200, body: "")
     stub_request(:post, "#{API}/ingestion/sources/src_1/upload/complete")
       .with(body: { job_id: "job_1", file_ids: ["file_1"] })
       .to_return_json(body: { job_id: "job_1", status: "pending" })
 
-    response = @client.ingestion.ingest_files(dataset_id: "ds_1", paths: [file.path], metadata: { project: "docs" })
+    response = @client.ingestion.ingest_files(
+      dataset_id: "ds_1",
+      paths: [file.path],
+      metadata: { project: "docs" },
+      security_scope_key: "tenant-acme"
+    )
 
     assert_requested upload
     assert_equal "pending", response.fetch("status")

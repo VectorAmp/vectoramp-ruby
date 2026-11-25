@@ -36,7 +36,7 @@ module VectorAmp
     # @param name [String, nil] optional human-readable name.
     # @param metadata [Hash, nil] optional metadata blob.
     # @return [Hash] created schedule.
-    def create(source_id:, dataset_id:, cron:, timezone: nil, pipeline_id: nil, enabled: nil, name: nil, metadata: nil)
+    def create(source_id:, dataset_id:, cron:, timezone: nil, pipeline_id: nil, enabled: nil, name: nil, metadata: nil, security_scope: nil)
       body = {
         "source_id" => source_id,
         "dataset_id" => dataset_id,
@@ -47,13 +47,14 @@ module VectorAmp
       body["enabled"] = enabled unless enabled.nil?
       body["name"] = name unless name.nil?
       body["metadata"] = metadata unless metadata.nil?
+      body["security_scope"] = security_scope unless security_scope.nil?
       @transport.request(:post, "/ingestion/schedules", body: body)
     end
 
     # Update a schedule. Only non-nil fields are sent.
     # @param schedule_id [String]
     # @return [Hash] updated schedule.
-    def update(schedule_id, cron: nil, timezone: nil, pipeline_id: nil, enabled: nil, name: nil, metadata: nil)
+    def update(schedule_id, cron: nil, timezone: nil, pipeline_id: nil, enabled: nil, name: nil, metadata: nil, security_scope: nil)
       body = {}
       body["cron"] = cron unless cron.nil?
       body["timezone"] = timezone unless timezone.nil?
@@ -61,6 +62,7 @@ module VectorAmp
       body["enabled"] = enabled unless enabled.nil?
       body["name"] = name unless name.nil?
       body["metadata"] = metadata unless metadata.nil?
+      body["security_scope"] = security_scope unless security_scope.nil?
       @transport.request(:patch, "/ingestion/schedules/#{schedule_id}", body: body)
     end
 
