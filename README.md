@@ -299,6 +299,23 @@ client.ingestion.ingest_files(
 dataset.ingest_files(paths: ["docs/whitepaper.pdf"])
 ```
 
+## Dataset permissions
+
+Assign writes to an active dataset-local scope by external key. Omit the key to use the dataset
+default.
+
+```ruby
+dataset.insert(vectors: [{ id: "v1", values: [0.1, 0.2], security_scope_key: "tenant-acme" }])
+dataset.add_texts(["private handbook"], security_scope_key: "tenant-acme")
+dataset.ingest_files(paths: ["handbook.pdf"], security_scope_key: "tenant-acme")
+client.schedules.create(
+  source_id: "src_1", dataset_id: dataset.id, cron: "0 0 * * *",
+  security_scope: { external_key: "tenant-acme" }
+)
+```
+
+Search is filtered automatically from the caller's effective permissions.
+
 ## Intelligence / RAG
 
 Non-streaming:

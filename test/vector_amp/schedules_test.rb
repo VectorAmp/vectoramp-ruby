@@ -20,7 +20,10 @@ class VectorAmpSchedulesTest < Minitest::Test
     stub_request(:get, "#{API}/ingestion/schedules/sch_1")
       .to_return_json(body: { id: "sch_1", cron: "0 * * * *", enabled: true })
     stub_request(:post, "#{API}/ingestion/schedules")
-      .with(body: { source_id: "src_1", dataset_id: "ds_1", cron: "0 0 * * *", timezone: "UTC" })
+      .with(body: {
+        source_id: "src_1", dataset_id: "ds_1", cron: "0 0 * * *", timezone: "UTC",
+        security_scope: { external_key: "tenant-acme" }
+      })
       .to_return_json(status: 201, body: { id: "sch_2", cron: "0 0 * * *", enabled: true })
     stub_request(:patch, "#{API}/ingestion/schedules/sch_2")
       .with(body: { enabled: false })
@@ -41,6 +44,7 @@ class VectorAmpSchedulesTest < Minitest::Test
       dataset_id: "ds_1",
       cron: "0 0 * * *",
       timezone: "UTC",
+      security_scope: { external_key: "tenant-acme" },
     )
     assert_equal "sch_2", created.fetch("id")
 

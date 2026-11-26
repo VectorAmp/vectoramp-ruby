@@ -171,11 +171,14 @@ class VectorAmpDatasetsTest < Minitest::Test
                vectors = JSON.parse(request.body).fetch("vectors")
                request.body.include?('"id":10') &&
                  vectors[0]["id"] == 10 &&
-                 vectors[1]["id"] == 11
+                 vectors[1]["id"] == 11 &&
+                 vectors.all? { |vector| vector["security_scope_key"] == "tenant-acme" }
              }
              .to_return_json(body: { inserted: 2 })
 
-    @client.datasets.add_texts("ds_1", %w[alpha beta], ids: [10, 11])
+    @client.datasets.add_texts(
+      "ds_1", %w[alpha beta], ids: [10, 11], security_scope_key: "tenant-acme"
+    )
 
     assert_requested insert
   end
